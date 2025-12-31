@@ -1,13 +1,16 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 from datetime import datetime
-
+from app.repository.file_url_repository import FileUrlRepository
 from app.repository.certificate_repository import CertificateRepository
 from app.repository.upload_repository import UploadRepository
 from app.repository.notification_repository import NotificationRepository
 from app.services.auth_dependency import verify_user
 from app.schemas.certificate_schema import CertificateCreate, CertificateUpdate
+import logging
 
+logger = logging.getLogger("certifications")
+logger.setLevel(logging.INFO)
 router = APIRouter(prefix="/certifications", tags=["Certifications"])
 
 
@@ -20,7 +23,7 @@ async def expand_file_ids(file_ids: List[str]):
         file_data = await UploadRepository.get_file_by_id(fid)
         if file_data:
             expanded.append({
-                "id": file_data["_id"],
+                "id": str(file_data["_id"]),
                 "filename": file_data["filename"],
                 "content": file_data["content"]
             })
@@ -37,7 +40,7 @@ async def expand_certificate(cert: dict):
         file_doc = await UploadRepository.get_file_by_id(cert["certificate_logo"])
         if file_doc:
             cert["certificate_logo"] = {
-                "id": file_doc["_id"],
+                "id": str(file_doc["_id"]),
                 "filename": file_doc["filename"],
                 "content": file_doc["content"]
             }
@@ -72,9 +75,45 @@ async def create_certificate(payload: CertificateCreate, user=Depends(verify_use
 
 
 # ------------------------------------------------------------------
+# Helper: expand file ids to Cloudinary URLs
+# ------------------------------------------------------------------
+async def expand_file_url_ids(file_ids: List[str]):
+    expanded = []
+    for fid in file_ids or []:
+        f = await FileUrlRepository.get_url_by_file_id(fid)
+        if f:
+            expanded.append({
+                "file_id": str(fid),
+                "filename": f["filename"],
+                "url": f["url"]
+            })
+    return expanded
+
+
+async def expand_certificate_url(cert: dict):
+    if not cert or not cert.get("certificate_logo"):
+        return cert
+
+    if isinstance(cert["certificate_logo"], list):
+        cert["certificate_logo"] = await expand_file_url_ids(cert["certificate_logo"])
+        logger.info("EXPANDED CERT LOGO LIST:", cert["certificate_logo"])
+    else:
+        f = await FileUrlRepository.get_url_by_file_id(cert["certificate_logo"])
+        logger.info("EXPANDED CERT LOGO SINGLE FILE:", f)
+        if f:
+            cert["certificate_logo"] = {
+                "file_id": cert["certificate_logo"],
+                "filename": f["filename"],
+                "url": f["url"]
+            }
+
+    return cert
+
+
+# ------------------------------------------------------------------
 # GET all Certificates (Product-style)
 # ------------------------------------------------------------------
-@router.get("/", dependencies=[Depends(verify_user)])
+@router.get("/")
 async def get_certificates():
     certs = await CertificateRepository.get_all_certificates()
 
@@ -91,7 +130,7 @@ async def get_certificates():
 # ------------------------------------------------------------------
 # GET Certificate by ID (Product-style)
 # ------------------------------------------------------------------
-@router.get("/{cert_id}", dependencies=[Depends(verify_user)])
+@router.get("/{cert_id}")
 async def get_certificate(cert_id: str):
     cert = await CertificateRepository.get_certificate_by_id(cert_id)
     if not cert:
@@ -172,3 +211,28 @@ async def delete_certificate(cert_id: str, user=Depends(verify_user)):
     return {
         "message": "Certificate deleted successfully"
     }
+
+
+@router.get("/url/")
+async def get_certificates_url():
+    certs = await CertificateRepository.get_all_certificates()
+    logger.info(f"Fetched {len(certs)} certificates for URL expansion.")
+
+    expanded = []
+    for cert in certs:
+        expanded.append(await expand_certificate_url(cert))
+
+    return {
+        "count": len(expanded),
+        "certificates": expanded
+    }
+
+
+@router.get("/url/{cert_id}")
+async def get_certificate_url(cert_id: str):
+    cert = await CertificateRepository.get_certificate_by_id(cert_id)
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+
+    cert = await expand_certificate_url(cert)
+    return cert

@@ -8,6 +8,7 @@ from app.repository.notification_repository import NotificationRepository
 from app.repository.client_repository import ClientRepository
 from app.repository.product_repository import ProductRepository
 from app.repository.certificate_repository import CertificateRepository
+from app.repository.file_url_repository import FileUrlRepository
 
 from app.services.auth_dependency import verify_user
 from app.schemas.industry_schema import IndustryCreate, IndustryUpdate
@@ -39,6 +40,89 @@ async def expand_files(file_ids: List[str]):
                 "content": file["content"]
             })
     return expanded
+
+
+# ------------------------------------------------------------------
+# URL-based file expanders (Industry)
+# ------------------------------------------------------------------
+async def expand_file_url(file_id: str | None):
+    if not file_id:
+        return None
+
+    f = await FileUrlRepository.get_url_by_file_id(file_id)
+    if not f:
+        return None
+
+    return {
+        "file_id": file_id,
+        "filename": f["filename"],
+        "url": f["url"]
+    }
+
+
+async def expand_files_url(file_ids: List[str]):
+    expanded = []
+    for fid in file_ids or []:
+        f = await FileUrlRepository.get_url_by_file_id(fid)
+        if f:
+            expanded.append({
+                "file_id": fid,
+                "filename": f["filename"],
+                "url": f["url"]
+            })
+    return expanded
+
+async def hydrate_industry_url(industry: dict):
+    if not industry:
+        return None
+
+    industry["industry_logo"] = await expand_file_url(industry.get("industry_logo"))
+    industry["cover_image"] = await expand_file_url(industry.get("cover_image"))
+    # industry["industry_images"] = await expand_files_url(
+    #     industry.get("industry_images", [])
+    # )
+    raw_images = industry.get("industry_images", [])
+
+    image_ids = []
+
+    if isinstance(raw_images, dict):
+        image_ids = (
+            raw_images.get("keep", []) +
+            raw_images.get("new_uploaded_ids", [])
+        )
+    elif isinstance(raw_images, list):
+        image_ids = raw_images
+
+    # 🔑 normalize ObjectId → str
+    image_ids = [str(i) for i in image_ids if i]
+
+    industry["industry_images"] = await expand_files_url(image_ids)
+
+    # ⚠️ Clients / Products / Certifications remain normal objects
+    industry["clients"] = await expand_clients(industry.get("client_ids", []))
+    industry["products"] = await expand_products(industry.get("product_ids", []))
+    industry["certifications"] = await expand_certifications(
+        industry.get("certification_ids", [])
+    )
+
+    return industry
+
+@router.get("/url/")
+async def get_industries_url():
+    industries = await IndustryRepository.get_all_industries()
+
+    return {
+        "count": len(industries),
+        "industries": [await hydrate_industry_url(i) for i in industries]
+    }
+
+@router.get("/url/{industry_id}")
+async def get_industry_url(industry_id: str):
+    industry = await IndustryRepository.get_industry_by_id(industry_id)
+    if not industry:
+        raise HTTPException(404, "Industry not found")
+
+    return await hydrate_industry_url(industry)
 
 
 async def expand_clients(ids: List[str]):

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List, Optional, Union
 from datetime import datetime
-
+from app.repository.file_url_repository import FileUrlRepository
 from app.repository.client_repository import ClientRepository
 from app.repository.upload_repository import UploadRepository
 from app.repository.notification_repository import NotificationRepository
@@ -23,6 +23,67 @@ async def expand_file_ids(file_ids: List[str]):
                 "content": file_data["content"]
             })
     return expanded
+
+
+# ------------------------------------------------------------------
+# Helper: expand file ids to Cloudinary URLs (Client)
+# ------------------------------------------------------------------
+async def expand_file_url_ids(file_ids: List[str]):
+    expanded = []
+    for fid in file_ids or []:
+        f = await FileUrlRepository.get_url_by_file_id(fid)
+        if f:
+            expanded.append({
+                "file_id": fid,
+                "filename": f["filename"],
+                "url": f["url"]
+            })
+    return expanded
+
+
+async def expand_client_url(client: dict):
+    if not client or not client.get("client_logo"):
+        return client
+
+    if isinstance(client["client_logo"], list):
+        client["client_logo"] = await expand_file_url_ids(client["client_logo"])
+    else:
+        f = await FileUrlRepository.get_url_by_file_id(client["client_logo"])
+        if f:
+            client["client_logo"] = {
+                "file_id": client["client_logo"],
+                "filename": f["filename"],
+                "url": f["url"]
+            }
+
+    return client
+
+
+
+
+@router.get("/url")
+async def get_clients_url():
+    clients = await ClientRepository.get_all_clients()
+
+    expanded = []
+    for client in clients:
+        expanded.append(await expand_client_url(client))
+
+    return {
+        "count": len(expanded),
+        "clients": expanded
+    }
+
+
+@router.get("/url/{client_id}")
+async def get_client_url(client_id: str):
+    client = await ClientRepository.get_client_by_id(client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    client = await expand_client_url(client)
+    return client
+
 
 
 @router.post("/", dependencies=[Depends(verify_user)])
