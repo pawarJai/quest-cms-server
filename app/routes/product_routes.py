@@ -144,7 +144,7 @@
 
 from fastapi import APIRouter, HTTPException, Depends, Request
 from datetime import datetime
-from app.schemas.product_schema import ProductCreate, ProductUpdate
+from app.schemas.product_schema import ProductCreate, ProductUpdate,ProductFilterRequest
 from app.repository.product_repository import ProductRepository
 from app.repository.notification_repository import NotificationRepository
 from app.repository.file_url_repository import FileUrlRepository
@@ -335,39 +335,41 @@ async def delete_product(product_id: str, request: Request):
 
     return {"message": "Deleted"}
 
-
 @router.post("/filter")
-async def filter_products(
-    page: int = 1,
-    limit: int = 10,
-    productType: Optional[str] = None,
-    specifications: Optional[dict] = None
-):
-    skip, limit = get_pagination(page, limit)
+async def filter_products(payload: ProductFilterRequest):
+    skip, limit = get_pagination(payload.page, payload.limit)
 
     query = {}
 
-    if productType:
-        query["productType"] = productType
+    # --- productType filter ---
+    if payload.productType:
+        query["productType"] = payload.productType
 
-    if specifications:
+    # --- specifications filter ---
+    if payload.specifications:
         query["specifications"] = {
             "$all": [
                 {"$elemMatch": {"key": k, "value": v}}
-                for k, v in specifications.items()
+                for k, v in payload.specifications.items()
             ]
         }
+
+    # ❗ ABSOLUTE SAFETY
+    if not query:
+        raise HTTPException(
+            status_code=400,
+            detail="At least one valid filter is required"
+        )
 
     products = await ProductRepository.filter_products(query, skip, limit)
     total = await ProductRepository.count_filtered_products(query)
 
     return {
-        "page": page,
-        "limit": limit,
+        "page": payload.page,
+        "limit": payload.limit,
         "total": total,
         "products": [await expand_product(p) for p in products]
     }
-
 
 @router.get("/by-type/{product_type}")
 async def get_products_by_type(

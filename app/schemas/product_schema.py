@@ -57,3 +57,10 @@ class ProductUpdate(BaseModel):
 
     specifications: Optional[List[Specification]]
     features: Optional[List[Feature]]
+
+
+class ProductFilterRequest(BaseModel):
+    page: int = 1
+    limit: int = 10
+    productType: Optional[str] = None
+    specifications: Optional[Dict[str, str]] = None
