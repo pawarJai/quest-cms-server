@@ -275,14 +275,21 @@ async def get_product(product_id: str):
 
 
 @router.get("/url/")
-async def get_products_url(page: int = 1, limit: int = 10):
-    skip, limit = get_pagination(page, limit)
-
+async def get_products_url(page: Optional[int] = None, limit: Optional[int] = None):
+    if page is None and limit is None:
+        products = await ProductRepository.get_all_products()
+        total = len(products)
+        return {
+            "page": 1,
+            "limit": total,
+            "total": total,
+            "products": [await expand_product_url(p) for p in products]
+        }
+    skip, limit = get_pagination(page or 1, limit or 10)
     products = await ProductRepository.get_products_paginated(skip, limit)
     total = await ProductRepository.count_products()
-
     return {
-        "page": page,
+        "page": page or 1,
         "limit": limit,
         "total": total,
         "products": [await expand_product_url(p) for p in products]

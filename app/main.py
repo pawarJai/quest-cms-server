@@ -8,6 +8,8 @@ from app.routes.industry_routes import router as industry_router
 from app.routes.client_routes import router as client_router
 from app.routes.certificate_routes import router as cert_router
 from app.routes.about_routes import router as about_router
+from app.routes.file_url_routes import router as file_url_router
+from app.config.database import db
 app = FastAPI(title="User Management API")
 
 # ✔ FINAL WORKING CORS CONFIG
@@ -27,6 +29,7 @@ app.include_router(industry_router)
 app.include_router(client_router)
 app.include_router(cert_router)
 app.include_router(about_router)
+app.include_router(file_url_router)
 
 def main():
     import uvicorn
