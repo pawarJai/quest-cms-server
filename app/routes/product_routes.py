@@ -172,6 +172,24 @@ async def expand_file(file_id: str):
 async def expand_file_list(ids: list[str]):
     return [await expand_file(i) for i in ids if i]
 
+async def expand_file_with_url(file_id: str):
+    if not file_id:
+        return None
+    base = await UploadRepository.get_file_by_id(file_id)
+    url_doc = await FileUrlRepository.get_url_by_file_id(file_id)
+    if not base and not url_doc:
+        return None
+    res = {}
+    if base:
+        res.update({"id": base["_id"], "filename": base["filename"], "content": base["content"]})
+    else:
+        res.update({"id": file_id, "filename": url_doc.get("filename") if url_doc else None})
+    if url_doc:
+        res.update({"url": url_doc.get("url"), "type": url_doc.get("type")})
+    return res
+
+async def expand_file_with_url_list(ids: list[str]):
+    return [await expand_file_with_url(i) for i in ids if i]
 
 async def expand_file_url(file_id: str):
     if not file_id:
@@ -235,15 +253,15 @@ async def create_product(payload: ProductCreate, user=Depends(verify_user)):
 
 # ---------------- EXPAND PRODUCT ----------------
 async def expand_product(product: dict):
-    product["cover_image"] = await expand_file(product.get("cover_image"))
-    product["product_360_image"] = await expand_file(product.get("product_360_image"))
-    product["product_3d_video"] = await expand_file(product.get("product_3d_video"))
+    product["cover_image"] = await expand_file_with_url(product.get("cover_image"))
+    product["product_360_image"] = await expand_file_with_url(product.get("product_360_image"))
+    product["product_3d_video"] = await expand_file_with_url(product.get("product_3d_video"))
 
-    product["images"] = await expand_file_list(product.get("images", []))
-    product["documents"] = await expand_file_list(product.get("documents", []))
+    product["images"] = await expand_file_with_url_list(product.get("images", []))
+    product["documents"] = await expand_file_with_url_list(product.get("documents", []))
 
     for f in product.get("features", []):
-        f["image"] = await expand_file(f.get("image_id"))
+        f["image"] = await expand_file_with_url(f.get("image_id"))
 
     return product
 

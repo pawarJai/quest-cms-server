@@ -99,3 +99,4 @@ out/
 *.key
 *.crt
 secrets/
+API_response.json
