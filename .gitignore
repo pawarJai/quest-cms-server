@@ -100,3 +100,5 @@ out/
 *.crt
 secrets/
 API_response.json
+*.zip
+*.rar

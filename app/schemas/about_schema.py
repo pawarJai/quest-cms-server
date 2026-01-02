@@ -19,11 +19,11 @@ class AboutBase(BaseModel):
     short_description: Optional[str] = None
     long_description: Optional[str] = None
 
-    about_video: Optional[str] = None          # file id
-    product_images: List[str] = []              # file ids
+    about_video: Optional[str] = None      # file_id
+    gallery: List[str] = []                # file_ids ONLY
 
-    industries_served: List[IndustryServed] = []
-    gallery: List[MediaItem] = []
+    industry_ids: List[str] = []           # <-- reference industries
+    product_ids: List[str] = []            # <-- reference products
 
 
 class AboutCreate(AboutBase):

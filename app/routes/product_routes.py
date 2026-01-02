@@ -141,10 +141,13 @@
 #     return {"message": "Product deleted successfully"}
 
 
-
 from fastapi import APIRouter, HTTPException, Depends, Request
 from datetime import datetime
-from app.schemas.product_schema import ProductCreate, ProductUpdate,ProductFilterRequest
+from app.schemas.product_schema import (
+    ProductCreate,
+    ProductUpdate,
+    ProductFilterRequest,
+)
 from app.repository.product_repository import ProductRepository
 from app.repository.notification_repository import NotificationRepository
 from app.repository.file_url_repository import FileUrlRepository
@@ -162,15 +165,12 @@ async def expand_file(file_id: str):
     f = await UploadRepository.get_file_by_id(file_id)
     if not f:
         return None
-    return {
-        "id": f["_id"],
-        "filename": f["filename"],
-        "content": f["content"]
-    }
+    return {"id": f["_id"], "filename": f["filename"], "content": f["content"]}
 
 
 async def expand_file_list(ids: list[str]):
     return [await expand_file(i) for i in ids if i]
+
 
 async def expand_file_with_url(file_id: str):
     if not file_id:
@@ -181,15 +181,25 @@ async def expand_file_with_url(file_id: str):
         return None
     res = {}
     if base:
-        res.update({"id": base["_id"], "filename": base["filename"], "content": base["content"]})
+        res.update(
+            {
+                "id": base["_id"],
+                "filename": base["filename"],
+                "content": base["content"],
+            }
+        )
     else:
-        res.update({"id": file_id, "filename": url_doc.get("filename") if url_doc else None})
+        res.update(
+            {"id": file_id, "filename": url_doc.get("filename") if url_doc else None}
+        )
     if url_doc:
         res.update({"url": url_doc.get("url"), "type": url_doc.get("type")})
     return res
 
+
 async def expand_file_with_url_list(ids: list[str]):
     return [await expand_file_with_url(i) for i in ids if i]
+
 
 async def expand_file_url(file_id: str):
     if not file_id:
@@ -199,11 +209,8 @@ async def expand_file_url(file_id: str):
     if not f:
         return None
 
-    return {
-        "file_id": str(file_id),
-        "filename": f["filename"],
-        "url": f["url"]
-    }
+    return {"file_id": str(file_id), "filename": f["filename"], "url": f["url"]}
+
 
 async def expand_file_url_list(ids: list[str]):
     return [await expand_file_url(i) for i in ids if i]
@@ -212,7 +219,9 @@ async def expand_file_url_list(ids: list[str]):
 # ---------------- EXPAND PRODUCT (URL ONLY) ----------------
 async def expand_product_url(product: dict):
     product["cover_image"] = await expand_file_url(product.get("cover_image"))
-    product["product_360_image"] = await expand_file_url(product.get("product_360_image"))
+    product["product_360_image"] = await expand_file_url(
+        product.get("product_360_image")
+    )
     product["product_3d_video"] = await expand_file_url(product.get("product_3d_video"))
 
     product["images"] = await expand_file_url_list(product.get("images", []))
@@ -224,12 +233,12 @@ async def expand_product_url(product: dict):
     return product
 
 
-
 def get_pagination(page: int, limit: int):
     page = max(page, 1)
     limit = min(max(limit, 1), 100)
     skip = (page - 1) * limit
     return skip, limit
+
 
 # ---------------- CREATE ----------------
 @router.post("/", dependencies=[Depends(verify_user)])
@@ -241,12 +250,14 @@ async def create_product(payload: ProductCreate, user=Depends(verify_user)):
     product_id = await ProductRepository.create_product(data)
     product = await ProductRepository.get_product_by_id(product_id)
 
-    await NotificationRepository.create_notification({
-        "user_email": user,
-        "message": f"Product '{product['name']}' created",
-        "type": "product_created",
-        "created_at": datetime.utcnow()
-    })
+    await NotificationRepository.create_notification(
+        {
+            "user_email": user,
+            "message": f"Product '{product['name']}' created",
+            "type": "product_created",
+            "created_at": datetime.utcnow(),
+        }
+    )
 
     return {"message": "Product created", "product": await expand_product(product)}
 
@@ -254,8 +265,12 @@ async def create_product(payload: ProductCreate, user=Depends(verify_user)):
 # ---------------- EXPAND PRODUCT ----------------
 async def expand_product(product: dict):
     product["cover_image"] = await expand_file_with_url(product.get("cover_image"))
-    product["product_360_image"] = await expand_file_with_url(product.get("product_360_image"))
-    product["product_3d_video"] = await expand_file_with_url(product.get("product_3d_video"))
+    product["product_360_image"] = await expand_file_with_url(
+        product.get("product_360_image")
+    )
+    product["product_3d_video"] = await expand_file_with_url(
+        product.get("product_3d_video")
+    )
 
     product["images"] = await expand_file_with_url_list(product.get("images", []))
     product["documents"] = await expand_file_with_url_list(product.get("documents", []))
@@ -278,7 +293,7 @@ async def get_products(page: int = 1, limit: int = 10):
         "page": page,
         "limit": limit,
         "total": total,
-        "products": [await expand_product(p) for p in products]
+        "products": [await expand_product(p) for p in products],
     }
 
 
@@ -291,7 +306,6 @@ async def get_product(product_id: str):
     return await expand_product(product)
 
 
-
 @router.get("/url/")
 async def get_products_url(page: Optional[int] = None, limit: Optional[int] = None):
     if page is None and limit is None:
@@ -301,7 +315,7 @@ async def get_products_url(page: Optional[int] = None, limit: Optional[int] = No
             "page": 1,
             "limit": total,
             "total": total,
-            "products": [await expand_product_url(p) for p in products]
+            "products": [await expand_product_url(p) for p in products],
         }
     skip, limit = get_pagination(page or 1, limit or 10)
     products = await ProductRepository.get_products_paginated(skip, limit)
@@ -310,8 +324,9 @@ async def get_products_url(page: Optional[int] = None, limit: Optional[int] = No
         "page": page or 1,
         "limit": limit,
         "total": total,
-        "products": [await expand_product_url(p) for p in products]
+        "products": [await expand_product_url(p) for p in products],
     }
+
 
 @router.get("/url/{product_id}")
 async def get_product_by_id_url(product_id: str):
@@ -321,7 +336,6 @@ async def get_product_by_id_url(product_id: str):
         raise HTTPException(404, "Product not found")
 
     return await expand_product_url(product)
-
 
 
 # ---------------- UPDATE ----------------
@@ -335,7 +349,9 @@ async def update_product(product_id: str, payload: ProductUpdate):
 
     if "documents" in update_data:
         docs = update_data["documents"]
-        update_data["documents"] = docs.get("keep", []) + docs.get("new_uploaded_ids", [])
+        update_data["documents"] = docs.get("keep", []) + docs.get(
+            "new_uploaded_ids", []
+        )
 
     await ProductRepository.update_product(product_id, update_data)
     product = await ProductRepository.get_product_by_id(product_id)
@@ -351,14 +367,17 @@ async def delete_product(product_id: str, request: Request):
 
     await ProductRepository.delete_product(product_id)
 
-    await NotificationRepository.create_notification({
-        "user_email": request.state.user,
-        "message": f"Product '{product['name']}' deleted",
-        "type": "product_deleted",
-        "created_at": datetime.utcnow()
-    })
+    await NotificationRepository.create_notification(
+        {
+            "user_email": request.state.user,
+            "message": f"Product '{product['name']}' deleted",
+            "type": "product_deleted",
+            "created_at": datetime.utcnow(),
+        }
+    )
 
     return {"message": "Deleted"}
+
 
 @router.post("/filter")
 async def filter_products(payload: ProductFilterRequest):
@@ -382,8 +401,7 @@ async def filter_products(payload: ProductFilterRequest):
     # ❗ ABSOLUTE SAFETY
     if not query:
         raise HTTPException(
-            status_code=400,
-            detail="At least one valid filter is required"
+            status_code=400, detail="At least one valid filter is required"
         )
 
     products = await ProductRepository.filter_products(query, skip, limit)
@@ -393,15 +411,12 @@ async def filter_products(payload: ProductFilterRequest):
         "page": payload.page,
         "limit": payload.limit,
         "total": total,
-        "products": [await expand_product(p) for p in products]
+        "products": [await expand_product(p) for p in products],
     }
 
+
 @router.get("/by-type/{product_type}")
-async def get_products_by_type(
-    product_type: str,
-    page: int = 1,
-    limit: int = 10
-):
+async def get_products_by_type(product_type: str, page: int = 1, limit: int = 10):
     # pagination
     page = max(page, 1)
     limit = min(max(limit, 1), 100)
@@ -416,5 +431,5 @@ async def get_products_by_type(
         "page": page,
         "limit": limit,
         "total": total,
-        "products": [await expand_product(p) for p in products]
+        "products": [await expand_product(p) for p in products],
     }
