@@ -16,6 +16,40 @@ from app.schemas.industry_schema import IndustryCreate, IndustryUpdate
 router = APIRouter(prefix="/industries", tags=["Industries"])
 
 
+
+# ---------- URL-based expanders ----------
+
+async def expand_clients_url(ids: List[str]):
+    result = []
+    for cid in ids:
+        client = await ClientRepository.get_client_by_id(cid)
+        if client:
+            from app.routes.client_routes import expand_client_url
+            result.append(await expand_client_url(client))
+    return result
+
+
+async def expand_products_url(ids: List[str]):
+    result = []
+    for pid in ids:
+        product = await ProductRepository.get_product_by_id(pid)
+        if product:
+            from app.routes.product_routes import expand_product_url
+            result.append(await expand_product_url(product))
+    return result
+
+
+async def expand_certifications_url(ids: List[str]):
+    result = []
+    for cid in ids:
+        cert = await CertificateRepository.get_certificate_by_id(cid)
+        if cert:
+            from app.routes.certificate_routes import expand_certificate_url
+            result.append(await expand_certificate_url(cert))
+    return result
+
+
+
 async def expand_file(file_id: str | None):
     if not file_id:
         return None
@@ -99,9 +133,9 @@ async def hydrate_industry_url(industry: dict):
     industry["industry_images"] = await expand_files_url(image_ids)
 
     # ⚠️ Clients / Products / Certifications remain normal objects
-    industry["clients"] = await expand_clients(industry.get("client_ids", []))
-    industry["products"] = await expand_products(industry.get("product_ids", []))
-    industry["certifications"] = await expand_certifications(
+    industry["clients"] = await expand_clients_url(industry.get("client_ids", []))
+    industry["products"] = await expand_products_url(industry.get("product_ids", []))
+    industry["certifications"] = await expand_certifications_url(
         industry.get("certification_ids", [])
     )
 

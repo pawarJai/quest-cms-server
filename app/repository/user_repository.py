@@ -3,7 +3,7 @@ from app.models.user_model import User
 
 
 class UserRepository:
-
+    #new provided methods
     @staticmethod
     async def create_user(user: dict):
         return await db.users.insert_one(user)
