@@ -154,6 +154,8 @@ from app.repository.file_url_repository import FileUrlRepository
 from app.services.auth_dependency import verify_user
 from app.repository.upload_repository import UploadRepository
 from typing import Optional
+import logging
+logging.basicConfig(level=logging.INFO)
 
 router = APIRouter(prefix="/products", tags=["Products"])
 
@@ -216,13 +218,28 @@ async def expand_file_url_list(ids: list[str]):
     return [await expand_file_url(i) for i in ids if i]
 
 
+async def expand_video(file_id: str):
+    if not file_id:
+        return None
+
+    f = await FileUrlRepository.get_url_by_file_id(file_id)
+    if not f:
+        return None
+
+    return {
+        "file_id": str(file_id),
+        "filename": f.get("filename"),
+        "url": f.get("url"),
+        "type": "video",
+    }
+
 # ---------------- EXPAND PRODUCT (URL ONLY) ----------------
 async def expand_product_url(product: dict):
     product["cover_image"] = await expand_file_url(product.get("cover_image"))
     product["product_360_image"] = await expand_file_url(
         product.get("product_360_image")
     )
-    product["product_3d_video"] = await expand_file_url(product.get("product_3d_video"))
+    product["product_3d_video"] = await expand_video(product.get("product_3d_video"))
 
     product["images"] = await expand_file_url_list(product.get("images", []))
     product["documents"] = await expand_file_url_list(product.get("documents", []))
@@ -339,24 +356,41 @@ async def get_product_by_id_url(product_id: str):
 
 
 # ---------------- UPDATE ----------------
+# @router.put("/{product_id}", dependencies=[Depends(verify_user)])
+# async def update_product(product_id: str, payload: ProductUpdate):
+#     update_data = payload.dict(exclude_unset=True)
+
+#     if "images" in update_data:
+#         imgs = update_data["images"]
+#         update_data["images"] = imgs.get("keep", []) + imgs.get("new_uploaded_ids", [])
+
+#     if "documents" in update_data:
+#         docs = update_data["documents"]
+#         update_data["documents"] = docs.get("keep", []) + docs.get(
+#             "new_uploaded_ids", []
+#         )
+
+#     await ProductRepository.update_product(product_id, update_data)
+#     product = await ProductRepository.get_product_by_id(product_id)
+#     return {"message": "Updated", "product": await expand_product(product)}
+
 @router.put("/{product_id}", dependencies=[Depends(verify_user)])
 async def update_product(product_id: str, payload: ProductUpdate):
     update_data = payload.dict(exclude_unset=True)
 
-    if "images" in update_data:
-        imgs = update_data["images"]
-        update_data["images"] = imgs.get("keep", []) + imgs.get("new_uploaded_ids", [])
+    logging.info("Update product called: %s", update_data)
 
-    if "documents" in update_data:
-        docs = update_data["documents"]
-        update_data["documents"] = docs.get("keep", []) + docs.get(
-            "new_uploaded_ids", []
-        )
+    product = await ProductRepository.get_product_by_id(product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
 
     await ProductRepository.update_product(product_id, update_data)
-    product = await ProductRepository.get_product_by_id(product_id)
-    return {"message": "Updated", "product": await expand_product(product)}
 
+    updated = await ProductRepository.get_product_by_id(product_id)
+    return {
+        "message": "Product updated successfully",
+        "product": await expand_product(updated)
+    }
 
 # ---------------- DELETE ----------------
 @router.delete("/{product_id}", dependencies=[Depends(verify_user)])

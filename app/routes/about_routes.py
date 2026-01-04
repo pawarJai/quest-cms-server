@@ -192,10 +192,24 @@ async def expand_files(file_ids: List[str]):
             result.append(file)
     return result
 
+async def expand_video(file_id: str):
+    if not file_id:
+        return None
+
+    f = await FileUrlRepository.get_url_by_file_id(file_id)
+    if not f:
+        return None
+
+    return {
+        "file_id": str(file_id),
+        "filename": f.get("filename"),
+        "url": f.get("url"),
+        "type": "video",
+    }
 
 async def expand_about(doc: dict):
 
-    doc["about_video_file"] = await expand_file(doc.get("about_video"))
+    doc["about_video_file"] = await expand_video(doc.get("about_video"))
 
     doc["product_images_files"] = await expand_files(
         doc.get("product_images", [])

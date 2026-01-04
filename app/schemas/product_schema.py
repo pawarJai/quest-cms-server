@@ -2,10 +2,17 @@
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Union
 
+
+# from typing import Union, List, Dict
+
+
+
 class Specification(BaseModel):
     key: str
     value: str
     note: Optional[str] = None
+
+
 
 
 class Feature(BaseModel):
@@ -14,6 +21,24 @@ class Feature(BaseModel):
     image_id: Optional[str] = None   # 🔹 feature image
 
 
+class ProductUpdate(BaseModel):
+    name: Optional[str]
+    productType: Optional[str]
+
+    short_description: Optional[str]
+    long_description: Optional[str]
+
+    cover_image: Optional[str]
+    product_360_image: Optional[str]
+    product_3d_video: Optional[str]
+
+    images: Optional[List[str]]
+    documents: Optional[List[str]]
+
+    specifications: Optional[List[Specification]]
+    features: Optional[List[Feature]]
+
+    
 class ProductBase(BaseModel):
     name: str
     productType: Optional[str] = None
@@ -40,23 +65,23 @@ class ProductCreate(ProductBase):
     pass
 
 
-class ProductUpdate(BaseModel):
-    name: Optional[str]
-    productType: Optional[str]
+# class ProductUpdate(BaseModel):
+#     name: Optional[str]
+#     productType: Optional[str]
 
-    short_description: Optional[str]
-    long_description: Optional[str]
-    price: Optional[float]
+#     short_description: Optional[str]
+#     long_description: Optional[str]
+#     price: Optional[float]
 
-    cover_image: Optional[str]
-    product_360_image: Optional[str]
-    product_3d_video: Optional[str]
+#     cover_image: Optional[str]
+#     product_360_image: Optional[str]
+#     product_3d_video: Optional[str]
 
-    images: Optional[Dict[str, List[str]]]
-    documents: Optional[Dict[str, List[str]]]
+#     images: Optional[Dict[str, List[str]]]
+#     documents: Optional[Dict[str, List[str]]]
 
-    specifications: Optional[List[Specification]]
-    features: Optional[List[Feature]]
+#     specifications: Optional[List[Specification]]
+#     features: Optional[List[Feature]]
 
 
 class ProductFilterRequest(BaseModel):

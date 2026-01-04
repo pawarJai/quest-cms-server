@@ -3,7 +3,7 @@ from app.repository.upload_repository import UploadRepository
 from app.services.auth_dependency import verify_user
 from app.repository.file_url_repository import FileUrlRepository
 from app.services.cloudinary_service import upload_to_cloudinary
-
+from uuid import uuid4
 router = APIRouter()
 
 
@@ -83,22 +83,22 @@ async def upload_videos(files: list[UploadFile] = File(...)):
     for file in files:
         file_bytes = await file.read()
 
+        # Upload to Cloudinary
         cloud_url = await upload_to_cloudinary(
             file_bytes,
             file.filename,
             resource_type="video"
         )
 
-        file_id = await UploadRepository.save_file(
-            file.filename,
-            file_bytes
-        )
+        # ✅ Generate ID manually (no base64 storage)
+        file_id = str(uuid4())
 
+        # ✅ Save URL metadata
         await FileUrlRepository.save_url(
-            file_id,
-            file.filename,
-            cloud_url,
-            "video"
+            file_id=file_id,
+            filename=file.filename,
+            url=cloud_url,
+            file_type="video"
         )
 
         saved.append({
@@ -107,8 +107,10 @@ async def upload_videos(files: list[UploadFile] = File(...)):
             "cloudinary_url": cloud_url
         })
 
-    return saved
-
+    return {
+        "success": True,
+        "data": saved
+    }
 
 @router.get("/{file_id}")
 async def get_file(file_id: str):
