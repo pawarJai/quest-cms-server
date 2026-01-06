@@ -15,7 +15,7 @@ app = FastAPI(title="User Management API")
 # ✔ FINAL WORKING CORS CONFIG
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*","http://localhost:3000","https://quest-crm.onrender.com/"],          # allow all origins
+    allow_origins=["*","http://localhost:3000","https://quest-crm.onrender.com/","https://quest-crm-admin-panel.netlify.app/"],          # allow all origins
     allow_credentials=True,      # must be False when origins="*"
     allow_methods=["*"],          # allow all methods
     allow_headers=["*"],          # allow all headers

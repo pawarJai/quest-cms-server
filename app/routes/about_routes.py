@@ -398,15 +398,17 @@ async def update_about(
     if not existing:
         raise HTTPException(404, "About page not found")
 
+    # only update fields actually sent
     update_data = payload.dict(exclude_unset=True)
 
-    if "product_images" in update_data:
-        keep = update_data["product_images"].get("keep", [])
-        new = update_data["product_images"].get("new_uploaded_ids", [])
-        update_data["product_images"] = keep + new
+    # 🚫 REMOVED:
+    # - product_images merging
+    # - industries_served
+    # - object gallery handling
 
     await AboutRepository.update(about_id, update_data)
 
+    # reload + expand
     about = await AboutRepository.get_by_id(about_id)
     about = await expand_about(about)
 
