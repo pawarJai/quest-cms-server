@@ -1,5 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 from app.routes import auth_routes
 from app.routes.upload_routes import router as upload_router
 from app.routes.product_routes import router as product_router
@@ -31,6 +33,9 @@ app.include_router(cert_router)
 app.include_router(about_router)
 app.include_router(news_router)
 app.include_router(file_url_router)
+uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
+uploads_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 def main():
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
