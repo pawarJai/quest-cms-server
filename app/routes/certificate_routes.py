@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
 from datetime import datetime
 from app.repository.file_url_repository import FileUrlRepository
@@ -77,34 +77,40 @@ async def create_certificate(payload: CertificateCreate, user=Depends(verify_use
 # ------------------------------------------------------------------
 # Helper: expand file ids to Cloudinary URLs
 # ------------------------------------------------------------------
-async def expand_file_url_ids(file_ids: List[str]):
+async def expand_file_url_ids(file_ids: List[str], request: Request):
     expanded = []
     for fid in file_ids or []:
         f = await FileUrlRepository.get_url_by_file_id(fid)
         if f:
+            url_value = f["url"]
+            if isinstance(url_value, str) and url_value.startswith("/"):
+                url_value = str(request.base_url) + url_value.lstrip("/")
             expanded.append({
                 "file_id": str(fid),
                 "filename": f["filename"],
-                "url": f["url"]
+                "url": url_value
             })
     return expanded
 
 
-async def expand_certificate_url(cert: dict):
+async def expand_certificate_url(cert: dict, request: Request):
     if not cert or not cert.get("certificate_logo"):
         return cert
 
     if isinstance(cert["certificate_logo"], list):
-        cert["certificate_logo"] = await expand_file_url_ids(cert["certificate_logo"])
+        cert["certificate_logo"] = await expand_file_url_ids(cert["certificate_logo"], request)
         logger.info("EXPANDED CERT LOGO LIST:", cert["certificate_logo"])
     else:
         f = await FileUrlRepository.get_url_by_file_id(cert["certificate_logo"])
         logger.info("EXPANDED CERT LOGO SINGLE FILE:", f)
         if f:
+            url_value = f["url"]
+            if isinstance(url_value, str) and url_value.startswith("/"):
+                url_value = str(request.base_url) + url_value.lstrip("/")
             cert["certificate_logo"] = {
                 "file_id": cert["certificate_logo"],
                 "filename": f["filename"],
-                "url": f["url"]
+                "url": url_value
             }
 
     return cert
@@ -214,13 +220,13 @@ async def delete_certificate(cert_id: str, user=Depends(verify_user)):
 
 
 @router.get("/url/")
-async def get_certificates_url():
+async def get_certificates_url(request: Request):
     certs = await CertificateRepository.get_all_certificates()
     logger.info(f"Fetched {len(certs)} certificates for URL expansion.")
 
     expanded = []
     for cert in certs:
-        expanded.append(await expand_certificate_url(cert))
+        expanded.append(await expand_certificate_url(cert, request))
 
     return {
         "count": len(expanded),
@@ -229,10 +235,10 @@ async def get_certificates_url():
 
 
 @router.get("/url/{cert_id}")
-async def get_certificate_url(cert_id: str):
+async def get_certificate_url(cert_id: str, request: Request):
     cert = await CertificateRepository.get_certificate_by_id(cert_id)
     if not cert:
         raise HTTPException(status_code=404, detail="Certificate not found")
 
-    cert = await expand_certificate_url(cert)
+    cert = await expand_certificate_url(cert, request)
     return cert

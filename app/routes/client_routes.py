@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional, Union
 from datetime import datetime
 from app.repository.file_url_repository import FileUrlRepository
@@ -28,32 +28,38 @@ async def expand_file_ids(file_ids: List[str]):
 # ------------------------------------------------------------------
 # Helper: expand file ids to Cloudinary URLs (Client)
 # ------------------------------------------------------------------
-async def expand_file_url_ids(file_ids: List[str]):
+async def expand_file_url_ids(file_ids: List[str], request: Request):
     expanded = []
     for fid in file_ids or []:
         f = await FileUrlRepository.get_url_by_file_id(fid)
         if f:
+            url_value = f["url"]
+            if isinstance(url_value, str) and url_value.startswith("/"):
+                url_value = str(request.base_url) + url_value.lstrip("/")
             expanded.append({
                 "file_id": fid,
                 "filename": f["filename"],
-                "url": f["url"]
+                "url": url_value
             })
     return expanded
 
 
-async def expand_client_url(client: dict):
+async def expand_client_url(client: dict, request: Request):
     if not client or not client.get("client_logo"):
         return client
 
     if isinstance(client["client_logo"], list):
-        client["client_logo"] = await expand_file_url_ids(client["client_logo"])
+        client["client_logo"] = await expand_file_url_ids(client["client_logo"], request)
     else:
         f = await FileUrlRepository.get_url_by_file_id(client["client_logo"])
         if f:
+            url_value = f["url"]
+            if isinstance(url_value, str) and url_value.startswith("/"):
+                url_value = str(request.base_url) + url_value.lstrip("/")
             client["client_logo"] = {
                 "file_id": client["client_logo"],
                 "filename": f["filename"],
-                "url": f["url"]
+                "url": url_value
             }
 
     return client
@@ -62,12 +68,12 @@ async def expand_client_url(client: dict):
 
 
 @router.get("/url")
-async def get_clients_url():
+async def get_clients_url(request: Request):
     clients = await ClientRepository.get_all_clients()
 
     expanded = []
     for client in clients:
-        expanded.append(await expand_client_url(client))
+        expanded.append(await expand_client_url(client, request))
 
     return {
         "count": len(expanded),
@@ -76,12 +82,12 @@ async def get_clients_url():
 
 
 @router.get("/url/{client_id}")
-async def get_client_url(client_id: str):
+async def get_client_url(client_id: str, request: Request):
     client = await ClientRepository.get_client_by_id(client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
 
-    client = await expand_client_url(client)
+    client = await expand_client_url(client, request)
     return client
 
 

@@ -203,7 +203,7 @@ async def expand_file_with_url_list(ids: list[str]):
     return [await expand_file_with_url(i) for i in ids if i]
 
 
-async def expand_file_url(file_id: str):
+async def expand_file_url(file_id: str, request: Request):
     if not file_id:
         return None
 
@@ -211,14 +211,17 @@ async def expand_file_url(file_id: str):
     if not f:
         return None
 
-    return {"file_id": str(file_id), "filename": f["filename"], "url": f["url"]}
+    url_value = f["url"]
+    if isinstance(url_value, str) and url_value.startswith("/"):
+        url_value = str(request.base_url) + url_value.lstrip("/")
+    return {"file_id": str(file_id), "filename": f["filename"], "url": url_value}
 
 
-async def expand_file_url_list(ids: list[str]):
-    return [await expand_file_url(i) for i in ids if i]
+async def expand_file_url_list(ids: list[str], request: Request):
+    return [await expand_file_url(i, request) for i in ids if i]
 
 
-async def expand_video(file_id: str):
+async def expand_video(file_id: str, request: Request):
     if not file_id:
         return None
 
@@ -226,26 +229,29 @@ async def expand_video(file_id: str):
     if not f:
         return None
 
+    url_value = f.get("url")
+    if isinstance(url_value, str) and url_value.startswith("/"):
+        url_value = str(request.base_url) + url_value.lstrip("/")
     return {
         "file_id": str(file_id),
         "filename": f.get("filename"),
-        "url": f.get("url"),
+        "url": url_value,
         "type": "video",
     }
 
 # ---------------- EXPAND PRODUCT (URL ONLY) ----------------
-async def expand_product_url(product: dict):
-    product["cover_image"] = await expand_file_url(product.get("cover_image"))
+async def expand_product_url(product: dict, request: Request):
+    product["cover_image"] = await expand_file_url(product.get("cover_image"), request)
     product["product_360_image"] = await expand_file_url(
-        product.get("product_360_image")
+        product.get("product_360_image"), request
     )
-    product["product_3d_video"] = await expand_video(product.get("product_3d_video"))
+    product["product_3d_video"] = await expand_video(product.get("product_3d_video"), request)
 
-    product["images"] = await expand_file_url_list(product.get("images", []))
-    product["documents"] = await expand_file_url_list(product.get("documents", []))
+    product["images"] = await expand_file_url_list(product.get("images", []), request)
+    product["documents"] = await expand_file_url_list(product.get("documents", []), request)
 
     for f in product.get("features", []):
-        f["image"] = await expand_file_url(f.get("image_id"))
+        f["image"] = await expand_file_url(f.get("image_id"), request)
 
     return product
 
@@ -324,7 +330,7 @@ async def get_product(product_id: str):
 
 
 @router.get("/url/")
-async def get_products_url(page: Optional[int] = None, limit: Optional[int] = None):
+async def get_products_url(request: Request, page: Optional[int] = None, limit: Optional[int] = None):
     if page is None and limit is None:
         products = await ProductRepository.get_all_products()
         total = len(products)
@@ -332,7 +338,7 @@ async def get_products_url(page: Optional[int] = None, limit: Optional[int] = No
             "page": 1,
             "limit": total,
             "total": total,
-            "products": [await expand_product_url(p) for p in products],
+            "products": [await expand_product_url(p, request) for p in products],
         }
     skip, limit = get_pagination(page or 1, limit or 10)
     products = await ProductRepository.get_products_paginated(skip, limit)
@@ -341,18 +347,18 @@ async def get_products_url(page: Optional[int] = None, limit: Optional[int] = No
         "page": page or 1,
         "limit": limit,
         "total": total,
-        "products": [await expand_product_url(p) for p in products],
+        "products": [await expand_product_url(p, request) for p in products],
     }
 
 
 @router.get("/url/{product_id}")
-async def get_product_by_id_url(product_id: str):
+async def get_product_by_id_url(product_id: str, request: Request):
     product = await ProductRepository.get_product_by_id(product_id)
 
     if not product:
         raise HTTPException(404, "Product not found")
 
-    return await expand_product_url(product)
+    return await expand_product_url(product, request)
 
 
 # ---------------- UPDATE ----------------

@@ -35,12 +35,12 @@ async def upload_images(request: Request, files: list[UploadFile] = File(...)):
             file_type="image"
         )
 
-        absolute_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
+        absolute_cloudinary_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
         saved.append({
             "id": file_id,
             "filename": file.filename,
-            "cloudinary_url": cloud_url,
-            "url": absolute_url
+            "cloudinary_url": absolute_cloudinary_url,
+            "url": absolute_cloudinary_url
         })
 
     return saved
@@ -70,12 +70,12 @@ async def upload_docs(request: Request, files: list[UploadFile] = File(...)):
             "doc"
         )
 
-        absolute_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
+        absolute_cloudinary_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
         saved.append({
             "id": file_id,
             "filename": file.filename,
-            "cloudinary_url": cloud_url,
-            "url": absolute_url
+            "cloudinary_url": absolute_cloudinary_url,
+            "url": absolute_cloudinary_url
         })
 
     return saved
@@ -105,12 +105,12 @@ async def upload_videos(request: Request, files: list[UploadFile] = File(...)):
             file_type="video"
         )
 
-        absolute_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
+        absolute_cloudinary_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
         saved.append({
             "id": file_id,
             "filename": file.filename,
-            "cloudinary_url": cloud_url,
-            "url": absolute_url
+            "cloudinary_url": absolute_cloudinary_url,
+            "url": absolute_cloudinary_url
         })
 
     return {

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
 from datetime import datetime
 
@@ -19,33 +19,33 @@ router = APIRouter(prefix="/industries", tags=["Industries"])
 
 # ---------- URL-based expanders ----------
 
-async def expand_clients_url(ids: List[str]):
+async def expand_clients_url(ids: List[str], request: Request):
     result = []
     for cid in ids:
         client = await ClientRepository.get_client_by_id(cid)
         if client:
             from app.routes.client_routes import expand_client_url
-            result.append(await expand_client_url(client))
+            result.append(await expand_client_url(client, request))
     return result
 
 
-async def expand_products_url(ids: List[str]):
+async def expand_products_url(ids: List[str], request: Request):
     result = []
     for pid in ids:
         product = await ProductRepository.get_product_by_id(pid)
         if product:
             from app.routes.product_routes import expand_product_url
-            result.append(await expand_product_url(product))
+            result.append(await expand_product_url(product, request))
     return result
 
 
-async def expand_certifications_url(ids: List[str]):
+async def expand_certifications_url(ids: List[str], request: Request):
     result = []
     for cid in ids:
         cert = await CertificateRepository.get_certificate_by_id(cid)
         if cert:
             from app.routes.certificate_routes import expand_certificate_url
-            result.append(await expand_certificate_url(cert))
+            result.append(await expand_certificate_url(cert, request))
     return result
 
 
@@ -79,7 +79,7 @@ async def expand_files(file_ids: List[str]):
 # ------------------------------------------------------------------
 # URL-based file expanders (Industry)
 # ------------------------------------------------------------------
-async def expand_file_url(file_id: str | None):
+async def expand_file_url(file_id: str | None, request: Request):
     if not file_id:
         return None
 
@@ -87,31 +87,37 @@ async def expand_file_url(file_id: str | None):
     if not f:
         return None
 
+    url_value = f["url"]
+    if isinstance(url_value, str) and url_value.startswith("/"):
+        url_value = str(request.base_url) + url_value.lstrip("/")
     return {
         "file_id": file_id,
         "filename": f["filename"],
-        "url": f["url"]
+        "url": url_value
     }
 
 
-async def expand_files_url(file_ids: List[str]):
+async def expand_files_url(file_ids: List[str], request: Request):
     expanded = []
     for fid in file_ids or []:
         f = await FileUrlRepository.get_url_by_file_id(fid)
         if f:
+            url_value = f["url"]
+            if isinstance(url_value, str) and url_value.startswith("/"):
+                url_value = str(request.base_url) + url_value.lstrip("/")
             expanded.append({
                 "file_id": fid,
                 "filename": f["filename"],
-                "url": f["url"]
+                "url": url_value
             })
     return expanded
 
-async def hydrate_industry_url(industry: dict):
+async def hydrate_industry_url(industry: dict, request: Request):
     if not industry:
         return None
 
-    industry["industry_logo"] = await expand_file_url(industry.get("industry_logo"))
-    industry["cover_image"] = await expand_file_url(industry.get("cover_image"))
+    industry["industry_logo"] = await expand_file_url(industry.get("industry_logo"), request)
+    industry["cover_image"] = await expand_file_url(industry.get("cover_image"), request)
     # industry["industry_images"] = await expand_files_url(
     #     industry.get("industry_images", [])
     # )
@@ -130,33 +136,33 @@ async def hydrate_industry_url(industry: dict):
     # 🔑 normalize ObjectId → str
     image_ids = [str(i) for i in image_ids if i]
 
-    industry["industry_images"] = await expand_files_url(image_ids)
+    industry["industry_images"] = await expand_files_url(image_ids, request)
 
     # ⚠️ Clients / Products / Certifications remain normal objects
-    industry["clients"] = await expand_clients_url(industry.get("client_ids", []))
-    industry["products"] = await expand_products_url(industry.get("product_ids", []))
+    industry["clients"] = await expand_clients_url(industry.get("client_ids", []), request)
+    industry["products"] = await expand_products_url(industry.get("product_ids", []), request)
     industry["certifications"] = await expand_certifications_url(
-        industry.get("certification_ids", [])
+        industry.get("certification_ids", []), request
     )
 
     return industry
 
 @router.get("/url/")
-async def get_industries_url():
+async def get_industries_url(request: Request):
     industries = await IndustryRepository.get_all_industries()
 
     return {
         "count": len(industries),
-        "industries": [await hydrate_industry_url(i) for i in industries]
+        "industries": [await hydrate_industry_url(i, request) for i in industries]
     }
 
 @router.get("/url/{industry_id}")
-async def get_industry_url(industry_id: str):
+async def get_industry_url(industry_id: str, request: Request):
     industry = await IndustryRepository.get_industry_by_id(industry_id)
     if not industry:
         raise HTTPException(404, "Industry not found")
 
-    return await hydrate_industry_url(industry)
+    return await hydrate_industry_url(industry, request)
 
 
 async def expand_clients(ids: List[str]):
