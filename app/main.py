@@ -12,6 +12,7 @@ from app.routes.certificate_routes import router as cert_router
 from app.routes.news_routes import router as news_router 
 from app.routes.about_routes import router as about_router
 from app.routes.file_url_routes import router as file_url_router
+from app.routes.quote_routes import router as quote_router
 app = FastAPI(title="User Management API")
 
 # ✔ FINAL WORKING CORS CONFIG
@@ -33,9 +34,10 @@ app.include_router(cert_router)
 app.include_router(about_router)
 app.include_router(news_router)
 app.include_router(file_url_router)
-uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
-uploads_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
+app.include_router(quote_router)
+uploads_root = Path(__file__).resolve().parents[1] / "uploads"
+uploads_root.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_root)), name="uploads")
 def main():
     import uvicorn
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

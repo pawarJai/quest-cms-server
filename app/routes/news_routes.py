@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
 from datetime import datetime
 
@@ -48,7 +48,7 @@ async def expand_files(file_ids: List[str]):
 # FILE EXPANSION (URL)
 # =====================================================
 
-async def expand_file_url(file_id: str | None):
+async def expand_file_url(file_id: str | None, request: Request):
     if not file_id:
         return None
 
@@ -56,22 +56,29 @@ async def expand_file_url(file_id: str | None):
     if not f:
         return None
 
+    url_value = f["url"]
+    if isinstance(url_value, str) and url_value.startswith("/"):
+        url_value = str(request.base_url) + url_value.lstrip("/")
+
     return {
         "file_id": file_id,
         "filename": f["filename"],
-        "url": f["url"]
+        "url": url_value
     }
 
 
-async def expand_files_url(file_ids: List[str]):
+async def expand_files_url(file_ids: List[str], request: Request):
     expanded = []
     for fid in file_ids or []:
         f = await FileUrlRepository.get_url_by_file_id(fid)
         if f:
+            url_value = f["url"]
+            if isinstance(url_value, str) and url_value.startswith("/"):
+                url_value = str(request.base_url) + url_value.lstrip("/")
             expanded.append({
                 "file_id": fid,
                 "filename": f["filename"],
-                "url": f["url"]
+                "url": url_value
             })
     return expanded
 
@@ -91,12 +98,12 @@ async def hydrate_news(news: dict):
     return news
 
 
-async def hydrate_news_url(news: dict):
+async def hydrate_news_url(news: dict, request: Request):
     if not news:
         return None
 
-    news["news_logo"] = await expand_file_url(news.get("news_logo"))
-    news["cover_image"] = await expand_file_url(news.get("cover_image"))
+    news["news_logo"] = await expand_file_url(news.get("news_logo"), request)
+    news["cover_image"] = await expand_file_url(news.get("cover_image"), request)
 
     raw_images = news.get("news_images", [])
 
@@ -109,7 +116,7 @@ async def hydrate_news_url(news: dict):
     elif isinstance(raw_images, list):
         image_ids = raw_images
 
-    news["news_images"] = await expand_files_url(image_ids)
+    news["news_images"] = await expand_files_url(image_ids, request)
     return news
 
 
@@ -176,11 +183,11 @@ async def get_news_by_id(news_id: str):
 # =====================================================
 
 @router.get("/url/")
-async def get_news_url():
+async def get_news_url(request: Request):
     news = await NewsRepository.get_all_news()
     return {
         "count": len(news),
-        "news": [await hydrate_news_url(n) for n in news]
+        "news": [await hydrate_news_url(n, request) for n in news]
     }
 
 
@@ -189,12 +196,12 @@ async def get_news_url():
 # =====================================================
 
 @router.get("/url/{news_id}")
-async def get_news_url_by_id(news_id: str):
+async def get_news_url_by_id(news_id: str, request: Request):
     news = await NewsRepository.get_news_by_id(news_id)
     if not news:
         raise HTTPException(404, "News not found")
 
-    return await hydrate_news_url(news)
+    return await hydrate_news_url(news, request)
 
 
 # =====================================================
