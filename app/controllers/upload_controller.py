@@ -4,6 +4,7 @@ from app.services.auth_dependency import verify_user
 from app.repository.file_url_repository import FileUrlRepository
 from app.services.cloudinary_service import upload_to_cloudinary
 from uuid import uuid4
+import logging
 router = APIRouter()
 
 
@@ -23,18 +24,25 @@ async def upload_images(request: Request, files: list[UploadFile] = File(...), c
         )
 
         # 2️⃣ Store BASE64 in existing collection
-        file_id = await UploadRepository.save_file(
-            file.filename,
-            file_bytes
-        )
+        try:
+            file_id = await UploadRepository.save_file(
+                file.filename,
+                file_bytes
+            )
+        except Exception as e:
+            logging.error(f"UploadRepository.save_file failed: {e}")
+            file_id = str(uuid4())
 
         # 3️⃣ Store Cloudinary URL in second collection
-        await FileUrlRepository.save_url(
-            file_id=file_id,
-            filename=file.filename,
-            url=cloud_url,
-            file_type="image"
-        )
+        try:
+            await FileUrlRepository.save_url(
+                file_id=file_id,
+                filename=file.filename,
+                url=cloud_url,
+                file_type="image"
+            )
+        except Exception as e:
+            logging.error(f"FileUrlRepository.save_url failed: {e}")
 
         absolute_cloudinary_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
         saved.append({
@@ -60,17 +68,24 @@ async def upload_docs(request: Request, files: list[UploadFile] = File(...), cat
             key_prefix=category
         )
 
-        file_id = await UploadRepository.save_file(
-            file.filename,
-            file_bytes
-        )
+        try:
+            file_id = await UploadRepository.save_file(
+                file.filename,
+                file_bytes
+            )
+        except Exception as e:
+            logging.error(f"UploadRepository.save_file failed: {e}")
+            file_id = str(uuid4())
 
-        await FileUrlRepository.save_url(
-            file_id,
-            file.filename,
-            cloud_url,
-            "doc"
-        )
+        try:
+            await FileUrlRepository.save_url(
+                file_id,
+                file.filename,
+                cloud_url,
+                "doc"
+            )
+        except Exception as e:
+            logging.error(f"FileUrlRepository.save_url failed: {e}")
 
         absolute_cloudinary_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
         saved.append({
@@ -101,12 +116,15 @@ async def upload_videos(request: Request, files: list[UploadFile] = File(...), c
         file_id = str(uuid4())
 
         # ✅ Save URL metadata
-        await FileUrlRepository.save_url(
-            file_id=file_id,
-            filename=file.filename,
-            url=cloud_url,
-            file_type="video"
-        )
+        try:
+            await FileUrlRepository.save_url(
+                file_id=file_id,
+                filename=file.filename,
+                url=cloud_url,
+                file_type="video"
+            )
+        except Exception as e:
+            logging.error(f"FileUrlRepository.save_url failed: {e}")
 
         absolute_cloudinary_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
         saved.append({
