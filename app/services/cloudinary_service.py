@@ -3,7 +3,6 @@ from pathlib import Path
 from uuid import uuid4
 import os
 import mimetypes
-import urllib.parse
 
 async def upload_to_cloudinary(
     file_bytes: bytes,
@@ -103,33 +102,3 @@ async def upload_to_cloudinary(
         with open(path, "wb") as f:
             f.write(file_bytes)
         return f"/uploads/{unique}"
-
-def ensure_accessible_url(url: str) -> str:
-    if not url or (isinstance(url, str) and url.startswith("/")):
-        return url
-    force_presigned = os.environ.get("AWS_S3_FORCE_PRESIGNED", "").lower() in ("1", "true", "yes")
-    bucket = os.environ.get("AWS_S3_BUCKET")
-    access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-    secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-    region = os.environ.get("AWS_S3_REGION")
-    if not (force_presigned and bucket and access_key and secret_key):
-        return url
-    try:
-        import boto3
-        parsed = urllib.parse.urlparse(url)
-        key = (parsed.path or "").lstrip("/")
-        if not key:
-            return url
-        s3 = boto3.client(
-            "s3",
-            region_name=region,
-            aws_access_key_id=access_key,
-            aws_secret_access_key=secret_key,
-        )
-        return s3.generate_presigned_url(
-            ClientMethod="get_object",
-            Params={"Bucket": bucket, "Key": key},
-            ExpiresIn=int(os.environ.get("AWS_S3_PRESIGNED_SECONDS", "3600")),
-        )
-    except Exception:
-        return url

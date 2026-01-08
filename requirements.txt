@@ -15,4 +15,3 @@ PyJWT[crypto]
 pytz
 python-multipart
 cloudinary
-boto3

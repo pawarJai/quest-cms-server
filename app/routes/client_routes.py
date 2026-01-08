@@ -7,7 +7,6 @@ from app.repository.upload_repository import UploadRepository
 from app.repository.notification_repository import NotificationRepository
 from app.services.auth_dependency import verify_user
 from app.schemas.client_schema import ClientCreate, ClientUpdate
-from app.services.cloudinary_service import ensure_accessible_url
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
@@ -37,8 +36,6 @@ async def expand_file_url_ids(file_ids: List[str], request: Request):
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
                 url_value = str(request.base_url) + url_value.lstrip("/")
-            else:
-                url_value = ensure_accessible_url(url_value)
             expanded.append({
                 "file_id": fid,
                 "filename": f["filename"],
@@ -59,8 +56,6 @@ async def expand_client_url(client: dict, request: Request):
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
                 url_value = str(request.base_url) + url_value.lstrip("/")
-            else:
-                url_value = ensure_accessible_url(url_value)
             client["client_logo"] = {
                 "file_id": client["client_logo"],
                 "filename": f["filename"],

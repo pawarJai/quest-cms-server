@@ -7,7 +7,6 @@ from app.repository.upload_repository import UploadRepository
 from app.repository.notification_repository import NotificationRepository
 from app.services.auth_dependency import verify_user
 from app.schemas.certificate_schema import CertificateCreate, CertificateUpdate
-from app.services.cloudinary_service import ensure_accessible_url
 import logging
 
 logger = logging.getLogger("certifications")
@@ -86,8 +85,6 @@ async def expand_file_url_ids(file_ids: List[str], request: Request):
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
                 url_value = str(request.base_url) + url_value.lstrip("/")
-            else:
-                url_value = ensure_accessible_url(url_value)
             expanded.append({
                 "file_id": str(fid),
                 "filename": f["filename"],
@@ -110,8 +107,6 @@ async def expand_certificate_url(cert: dict, request: Request):
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
                 url_value = str(request.base_url) + url_value.lstrip("/")
-            else:
-                url_value = ensure_accessible_url(url_value)
             cert["certificate_logo"] = {
                 "file_id": cert["certificate_logo"],
                 "filename": f["filename"],

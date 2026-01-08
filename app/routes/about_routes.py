@@ -161,7 +161,6 @@ from app.repository.upload_repository import UploadRepository
 from app.repository.file_url_repository import FileUrlRepository
 from app.repository.notification_repository import NotificationRepository
 from app.services.auth_dependency import verify_user
-from app.services.cloudinary_service import ensure_accessible_url
 
 router = APIRouter(prefix="/about", tags=["About"])
 
@@ -204,7 +203,7 @@ async def expand_video(file_id: str):
     return {
         "file_id": str(file_id),
         "filename": f.get("filename"),
-        "url": ensure_accessible_url(f.get("url")),
+        "url": f.get("url"),
         "type": "video",
     }
 
@@ -253,7 +252,7 @@ async def expand_file_url(file_id: str):
     return {
         "file_id": file_id,
         "filename": f["filename"],
-        "url": ensure_accessible_url(f["url"])
+        "url": f["url"]
     }
 
 
