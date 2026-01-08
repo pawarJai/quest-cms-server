@@ -18,3 +18,10 @@ class FileUrlRepository:
             "url": url,
             "type": file_type
         })
+
+    @staticmethod
+    async def update_url(file_id: str, url: str):
+        await COLLECTION.update_one(
+            {"file_id": file_id},
+            {"$set": {"url": url}}
+        )

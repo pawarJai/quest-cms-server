@@ -1,6 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
 from datetime import datetime
+import os
+import base64
 
 from app.repository.industry_repository import IndustryRepository
 from app.repository.upload_repository import UploadRepository
@@ -89,7 +91,31 @@ async def expand_file_url(file_id: str | None, request: Request):
 
     url_value = f["url"]
     if isinstance(url_value, str) and url_value.startswith("/"):
-        url_value = str(request.base_url) + url_value.lstrip("/")
+        # attempt S3 re-upload if AWS env configured
+        bucket = os.environ.get("AWS_S3_BUCKET")
+        access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+        secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+        if bucket and access_key and secret_key:
+            file_doc = await UploadRepository.get_file_by_id(file_id)
+            if file_doc and file_doc.get("content"):
+                try:
+                    from app.services.cloudinary_service import upload_to_cloudinary
+                    file_bytes = base64.b64decode(file_doc["content"])
+                    new_url = await upload_to_cloudinary(
+                        file_bytes,
+                        f.get("filename") or "file",
+                        resource_type="image",
+                        key_prefix="industries"
+                    )
+                    if isinstance(new_url, str) and not new_url.startswith("/"):
+                        await FileUrlRepository.update_url(file_id, new_url)
+                        url_value = new_url
+                    else:
+                        url_value = str(request.base_url) + url_value.lstrip("/")
+                except Exception:
+                    url_value = str(request.base_url) + url_value.lstrip("/")
+        else:
+            url_value = str(request.base_url) + url_value.lstrip("/")
     return {
         "file_id": file_id,
         "filename": f["filename"],
@@ -104,7 +130,30 @@ async def expand_files_url(file_ids: List[str], request: Request):
         if f:
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
-                url_value = str(request.base_url) + url_value.lstrip("/")
+                bucket = os.environ.get("AWS_S3_BUCKET")
+                access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+                secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
+                if bucket and access_key and secret_key:
+                    file_doc = await UploadRepository.get_file_by_id(fid)
+                    if file_doc and file_doc.get("content"):
+                        try:
+                            from app.services.cloudinary_service import upload_to_cloudinary
+                            file_bytes = base64.b64decode(file_doc["content"])
+                            new_url = await upload_to_cloudinary(
+                                file_bytes,
+                                f.get("filename") or "file",
+                                resource_type="image",
+                                key_prefix="industries"
+                            )
+                            if isinstance(new_url, str) and not new_url.startswith("/"):
+                                await FileUrlRepository.update_url(fid, new_url)
+                                url_value = new_url
+                            else:
+                                url_value = str(request.base_url) + url_value.lstrip("/")
+                        except Exception:
+                            url_value = str(request.base_url) + url_value.lstrip("/")
+                else:
+                    url_value = str(request.base_url) + url_value.lstrip("/")
             expanded.append({
                 "file_id": fid,
                 "filename": f["filename"],
@@ -305,4 +354,3 @@ async def delete_industry(industry_id: str, user=Depends(verify_user)):
     })
 
     return {"message": "Industry deleted successfully"}
-
