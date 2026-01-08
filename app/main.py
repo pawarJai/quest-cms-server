@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
+import os
 from app.routes import auth_routes
 from app.routes.upload_routes import router as upload_router
 from app.routes.product_routes import router as product_router
@@ -35,7 +36,8 @@ app.include_router(about_router)
 app.include_router(news_router)
 app.include_router(file_url_router)
 app.include_router(quote_router)
-uploads_root = Path(__file__).resolve().parents[1] / "uploads"
+uploads_dir_str = os.environ.get("UPLOADS_DIR")
+uploads_root = Path(uploads_dir_str) if uploads_dir_str else (Path(__file__).resolve().parents[1] / "uploads")
 uploads_root.mkdir(parents=True, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_root)), name="uploads")
 def main():

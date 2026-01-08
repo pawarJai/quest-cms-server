@@ -155,6 +155,7 @@ from app.services.auth_dependency import verify_user
 from app.repository.upload_repository import UploadRepository
 from typing import Optional
 import logging
+from app.services.cloudinary_service import ensure_accessible_url
 logging.basicConfig(level=logging.INFO)
 
 router = APIRouter(prefix="/products", tags=["Products"])
@@ -214,6 +215,8 @@ async def expand_file_url(file_id: str, request: Request):
     url_value = f["url"]
     if isinstance(url_value, str) and url_value.startswith("/"):
         url_value = str(request.base_url) + url_value.lstrip("/")
+    else:
+        url_value = ensure_accessible_url(url_value)
     return {"file_id": str(file_id), "filename": f["filename"], "url": url_value}
 
 
@@ -232,6 +235,8 @@ async def expand_video(file_id: str, request: Request):
     url_value = f.get("url")
     if isinstance(url_value, str) and url_value.startswith("/"):
         url_value = str(request.base_url) + url_value.lstrip("/")
+    else:
+        url_value = ensure_accessible_url(url_value)
     return {
         "file_id": str(file_id),
         "filename": f.get("filename"),

@@ -12,6 +12,7 @@ from app.repository.file_url_repository import FileUrlRepository
 
 from app.services.auth_dependency import verify_user
 from app.schemas.industry_schema import IndustryCreate, IndustryUpdate
+from app.services.cloudinary_service import ensure_accessible_url
 
 router = APIRouter(prefix="/industries", tags=["Industries"])
 
@@ -90,6 +91,8 @@ async def expand_file_url(file_id: str | None, request: Request):
     url_value = f["url"]
     if isinstance(url_value, str) and url_value.startswith("/"):
         url_value = str(request.base_url) + url_value.lstrip("/")
+    else:
+        url_value = ensure_accessible_url(url_value)
     return {
         "file_id": file_id,
         "filename": f["filename"],
@@ -105,6 +108,8 @@ async def expand_files_url(file_ids: List[str], request: Request):
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
                 url_value = str(request.base_url) + url_value.lstrip("/")
+            else:
+                url_value = ensure_accessible_url(url_value)
             expanded.append({
                 "file_id": fid,
                 "filename": f["filename"],

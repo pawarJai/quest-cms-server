@@ -8,7 +8,7 @@ router = APIRouter()
 
 
 @router.post("/upload/images", dependencies=[Depends(verify_user)])
-async def upload_images(request: Request, files: list[UploadFile] = File(...)):
+async def upload_images(request: Request, files: list[UploadFile] = File(...), category: str | None = None):
     saved = []
 
     for file in files:
@@ -18,7 +18,8 @@ async def upload_images(request: Request, files: list[UploadFile] = File(...)):
         cloud_url = await upload_to_cloudinary(
             file_bytes,
             file.filename,
-            resource_type="image"
+            resource_type="image",
+            key_prefix=category
         )
 
         # 2️⃣ Store BASE64 in existing collection
@@ -46,7 +47,7 @@ async def upload_images(request: Request, files: list[UploadFile] = File(...)):
     return saved
 
 @router.post("/upload/docs", dependencies=[Depends(verify_user)])
-async def upload_docs(request: Request, files: list[UploadFile] = File(...)):
+async def upload_docs(request: Request, files: list[UploadFile] = File(...), category: str | None = None):
     saved = []
 
     for file in files:
@@ -55,7 +56,8 @@ async def upload_docs(request: Request, files: list[UploadFile] = File(...)):
         cloud_url = await upload_to_cloudinary(
             file_bytes,
             file.filename,
-            resource_type="raw"
+            resource_type="raw",
+            key_prefix=category
         )
 
         file_id = await UploadRepository.save_file(
@@ -81,7 +83,7 @@ async def upload_docs(request: Request, files: list[UploadFile] = File(...)):
     return saved
 
 @router.post("/upload/videos", dependencies=[Depends(verify_user)])
-async def upload_videos(request: Request, files: list[UploadFile] = File(...)):
+async def upload_videos(request: Request, files: list[UploadFile] = File(...), category: str | None = None):
     saved = []
 
     for file in files:
@@ -91,7 +93,8 @@ async def upload_videos(request: Request, files: list[UploadFile] = File(...)):
         cloud_url = await upload_to_cloudinary(
             file_bytes,
             file.filename,
-            resource_type="video"
+            resource_type="video",
+            key_prefix=category
         )
 
         # ✅ Generate ID manually (no base64 storage)
