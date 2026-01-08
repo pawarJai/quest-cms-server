@@ -3,6 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 import os
 import mimetypes
+from typing import Optional
 
 async def upload_to_cloudinary(
     file_bytes: bytes,
@@ -16,11 +17,17 @@ async def upload_to_cloudinary(
     if bucket and access_key and secret_key:
         try:
             import boto3
+            from botocore.config import Config
+            connect_timeout = int(os.environ.get("AWS_S3_CONNECT_TIMEOUT", "5"))
+            read_timeout = int(os.environ.get("AWS_S3_READ_TIMEOUT", "20"))
+            max_attempts = int(os.environ.get("AWS_S3_MAX_ATTEMPTS", "2"))
+            cfg = Config(connect_timeout=connect_timeout, read_timeout=read_timeout, retries={"max_attempts": max_attempts, "mode": "standard"})
             s3 = boto3.client(
                 "s3",
                 region_name=os.environ.get("AWS_S3_REGION"),
                 aws_access_key_id=access_key,
                 aws_secret_access_key=secret_key,
+                config=cfg,
             )
             ext = Path(filename).suffix
             default_prefix = None

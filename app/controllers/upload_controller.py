@@ -4,36 +4,32 @@ from app.services.auth_dependency import verify_user
 from app.repository.file_url_repository import FileUrlRepository
 from app.services.cloudinary_service import upload_to_cloudinary
 from uuid import uuid4
+import asyncio
 import logging
 router = APIRouter()
 
 
 @router.post("/upload/images", dependencies=[Depends(verify_user)])
 async def upload_images(request: Request, files: list[UploadFile] = File(...), category: str | None = None):
-    saved = []
-
-    for file in files:
+    async def process_file(file: UploadFile):
         file_bytes = await file.read()
-
-        # 1️⃣ Upload to Cloudinary FIRST
-        cloud_url = await upload_to_cloudinary(
+        cloud_task = asyncio.create_task(upload_to_cloudinary(
             file_bytes,
             file.filename,
             resource_type="image",
             key_prefix=category
-        )
-
-        # 2️⃣ Store BASE64 in existing collection
-        try:
-            file_id = await UploadRepository.save_file(
-                file.filename,
-                file_bytes
-            )
-        except Exception as e:
-            logging.error(f"UploadRepository.save_file failed: {e}")
+        ))
+        save_task = asyncio.create_task(UploadRepository.save_file(
+            file.filename,
+            file_bytes
+        ))
+        cloud_res, save_res = await asyncio.gather(cloud_task, save_task, return_exceptions=True)
+        cloud_url = cloud_res if not isinstance(cloud_res, Exception) else ""
+        if isinstance(save_res, Exception):
+            logging.error(f"UploadRepository.save_file failed: {save_res}")
             file_id = str(uuid4())
-
-        # 3️⃣ Store Cloudinary URL in second collection
+        else:
+            file_id = save_res
         try:
             await FileUrlRepository.save_url(
                 file_id=file_id,
@@ -43,40 +39,37 @@ async def upload_images(request: Request, files: list[UploadFile] = File(...), c
             )
         except Exception as e:
             logging.error(f"FileUrlRepository.save_url failed: {e}")
-
         absolute_cloudinary_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
-        saved.append({
+        return {
             "id": file_id,
             "filename": file.filename,
             "cloudinary_url": absolute_cloudinary_url,
             "url": absolute_cloudinary_url
-        })
-
-    return saved
+        }
+    tasks = [process_file(f) for f in files]
+    return await asyncio.gather(*tasks)
 
 @router.post("/upload/docs", dependencies=[Depends(verify_user)])
 async def upload_docs(request: Request, files: list[UploadFile] = File(...), category: str | None = None):
-    saved = []
-
-    for file in files:
+    async def process_file(file: UploadFile):
         file_bytes = await file.read()
-
-        cloud_url = await upload_to_cloudinary(
+        cloud_task = asyncio.create_task(upload_to_cloudinary(
             file_bytes,
             file.filename,
             resource_type="raw",
             key_prefix=category
-        )
-
-        try:
-            file_id = await UploadRepository.save_file(
-                file.filename,
-                file_bytes
-            )
-        except Exception as e:
-            logging.error(f"UploadRepository.save_file failed: {e}")
+        ))
+        save_task = asyncio.create_task(UploadRepository.save_file(
+            file.filename,
+            file_bytes
+        ))
+        cloud_res, save_res = await asyncio.gather(cloud_task, save_task, return_exceptions=True)
+        cloud_url = cloud_res if not isinstance(cloud_res, Exception) else ""
+        if isinstance(save_res, Exception):
+            logging.error(f"UploadRepository.save_file failed: {save_res}")
             file_id = str(uuid4())
-
+        else:
+            file_id = save_res
         try:
             await FileUrlRepository.save_url(
                 file_id,
@@ -86,36 +79,27 @@ async def upload_docs(request: Request, files: list[UploadFile] = File(...), cat
             )
         except Exception as e:
             logging.error(f"FileUrlRepository.save_url failed: {e}")
-
         absolute_cloudinary_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
-        saved.append({
+        return {
             "id": file_id,
             "filename": file.filename,
             "cloudinary_url": absolute_cloudinary_url,
             "url": absolute_cloudinary_url
-        })
-
-    return saved
+        }
+    tasks = [process_file(f) for f in files]
+    return await asyncio.gather(*tasks)
 
 @router.post("/upload/videos", dependencies=[Depends(verify_user)])
 async def upload_videos(request: Request, files: list[UploadFile] = File(...), category: str | None = None):
-    saved = []
-
-    for file in files:
+    async def process_file(file: UploadFile):
         file_bytes = await file.read()
-
-        # Upload to Cloudinary
         cloud_url = await upload_to_cloudinary(
             file_bytes,
             file.filename,
             resource_type="video",
             key_prefix=category
         )
-
-        # ✅ Generate ID manually (no base64 storage)
         file_id = str(uuid4())
-
-        # ✅ Save URL metadata
         try:
             await FileUrlRepository.save_url(
                 file_id=file_id,
@@ -125,19 +109,16 @@ async def upload_videos(request: Request, files: list[UploadFile] = File(...), c
             )
         except Exception as e:
             logging.error(f"FileUrlRepository.save_url failed: {e}")
-
         absolute_cloudinary_url = cloud_url if not isinstance(cloud_url, str) or not cloud_url.startswith("/") else (str(request.base_url) + cloud_url.lstrip("/"))
-        saved.append({
+        return {
             "id": file_id,
             "filename": file.filename,
             "cloudinary_url": absolute_cloudinary_url,
             "url": absolute_cloudinary_url
-        })
-
-    return {
-        "success": True,
-        "data": saved
-    }
+        }
+    tasks = [process_file(f) for f in files]
+    data = await asyncio.gather(*tasks)
+    return {"success": True, "data": data}
 
 @router.get("/{file_id}")
 async def get_file(file_id: str):
