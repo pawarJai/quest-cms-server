@@ -4,6 +4,7 @@ from app.services.auth_dependency import verify_user
 from app.repository.file_url_repository import FileUrlRepository
 from app.services.cloudinary_service import upload_to_cloudinary
 from uuid import uuid4
+import os
 import asyncio
 import logging
 router = APIRouter()
@@ -25,6 +26,9 @@ async def upload_images(request: Request, files: list[UploadFile] = File(...), c
         ))
         cloud_res, save_res = await asyncio.gather(cloud_task, save_task, return_exceptions=True)
         cloud_url = cloud_res if not isinstance(cloud_res, Exception) else ""
+        require_s3 = os.environ.get("AWS_S3_REQUIRED", "").lower() in ("1", "true", "yes")
+        if require_s3 and (not cloud_url or (isinstance(cloud_url, str) and cloud_url.startswith("/"))):
+            raise HTTPException(status_code=500, detail="S3 upload failed")
         if isinstance(save_res, Exception):
             logging.error(f"UploadRepository.save_file failed: {save_res}")
             file_id = str(uuid4())
@@ -65,6 +69,9 @@ async def upload_docs(request: Request, files: list[UploadFile] = File(...), cat
         ))
         cloud_res, save_res = await asyncio.gather(cloud_task, save_task, return_exceptions=True)
         cloud_url = cloud_res if not isinstance(cloud_res, Exception) else ""
+        require_s3 = os.environ.get("AWS_S3_REQUIRED", "").lower() in ("1", "true", "yes")
+        if require_s3 and (not cloud_url or (isinstance(cloud_url, str) and cloud_url.startswith("/"))):
+            raise HTTPException(status_code=500, detail="S3 upload failed")
         if isinstance(save_res, Exception):
             logging.error(f"UploadRepository.save_file failed: {save_res}")
             file_id = str(uuid4())
@@ -99,6 +106,9 @@ async def upload_videos(request: Request, files: list[UploadFile] = File(...), c
             resource_type="video",
             key_prefix=category
         )
+        require_s3 = os.environ.get("AWS_S3_REQUIRED", "").lower() in ("1", "true", "yes")
+        if require_s3 and (not cloud_url or (isinstance(cloud_url, str) and cloud_url.startswith("/"))):
+            raise HTTPException(status_code=500, detail="S3 upload failed")
         file_id = str(uuid4())
         try:
             await FileUrlRepository.save_url(

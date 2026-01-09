@@ -11,6 +11,7 @@ async def upload_to_cloudinary(
     resource_type: str,
     key_prefix: str | None = None
 ) -> str:
+    require_s3 = os.environ.get("AWS_S3_REQUIRED", "").lower() in ("1", "true", "yes")
     bucket = os.environ.get("AWS_S3_BUCKET")
     access_key = os.environ.get("AWS_ACCESS_KEY_ID")
     secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
@@ -66,7 +67,11 @@ async def upload_to_cloudinary(
                 return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
             return f"https://{bucket}.s3.amazonaws.com/{key}"
         except Exception:
+            if require_s3:
+                raise
             pass
+    elif require_s3:
+        raise Exception("S3 required but not configured")
     try:
         # Lazy import to avoid hard failure when package missing
         import cloudinary
@@ -96,6 +101,8 @@ async def upload_to_cloudinary(
         )
         return result["secure_url"]
     except Exception:
+        if require_s3:
+            raise
         uploads_dir_str = os.environ.get("UPLOADS_DIR")
         if uploads_dir_str:
             uploads = Path(uploads_dir_str)
