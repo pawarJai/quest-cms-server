@@ -4,6 +4,7 @@ from uuid import uuid4
 import os
 import mimetypes
 from typing import Optional
+import logging
 
 async def upload_to_cloudinary(
     file_bytes: bytes,
@@ -66,7 +67,8 @@ async def upload_to_cloudinary(
             if region:
                 return f"https://{bucket}.s3.{region}.amazonaws.com/{key}"
             return f"https://{bucket}.s3.amazonaws.com/{key}"
-        except Exception:
+        except Exception as e:
+            logging.exception(f"S3 upload failed bucket={bucket} region={os.environ.get('AWS_S3_REGION')} filename={filename}")
             if require_s3:
                 raise
             pass
@@ -100,7 +102,8 @@ async def upload_to_cloudinary(
             resource_type=resource_type
         )
         return result["secure_url"]
-    except Exception:
+    except Exception as e:
+        logging.exception(f"Cloudinary upload failed filename={filename} resource_type={resource_type}")
         if require_s3:
             raise
         uploads_dir_str = os.environ.get("UPLOADS_DIR")

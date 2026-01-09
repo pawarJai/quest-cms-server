@@ -26,6 +26,8 @@ async def upload_images(request: Request, files: list[UploadFile] = File(...), c
         ))
         cloud_res, save_res = await asyncio.gather(cloud_task, save_task, return_exceptions=True)
         cloud_url = cloud_res if not isinstance(cloud_res, Exception) else ""
+        if isinstance(cloud_res, Exception):
+            logging.exception(f"Cloud upload exception filename={file.filename} category={category}")
         require_s3 = os.environ.get("AWS_S3_REQUIRED", "").lower() in ("1", "true", "yes")
         if require_s3 and (not cloud_url or (isinstance(cloud_url, str) and cloud_url.startswith("/"))):
             raise HTTPException(status_code=500, detail="S3 upload failed")
@@ -69,6 +71,8 @@ async def upload_docs(request: Request, files: list[UploadFile] = File(...), cat
         ))
         cloud_res, save_res = await asyncio.gather(cloud_task, save_task, return_exceptions=True)
         cloud_url = cloud_res if not isinstance(cloud_res, Exception) else ""
+        if isinstance(cloud_res, Exception):
+            logging.exception(f"Cloud upload exception filename={file.filename} category={category}")
         require_s3 = os.environ.get("AWS_S3_REQUIRED", "").lower() in ("1", "true", "yes")
         if require_s3 and (not cloud_url or (isinstance(cloud_url, str) and cloud_url.startswith("/"))):
             raise HTTPException(status_code=500, detail="S3 upload failed")
@@ -106,6 +110,8 @@ async def upload_videos(request: Request, files: list[UploadFile] = File(...), c
             resource_type="video",
             key_prefix=category
         )
+        if not cloud_url:
+            logging.error(f"Cloud upload returned empty url filename={file.filename} category={category}")
         require_s3 = os.environ.get("AWS_S3_REQUIRED", "").lower() in ("1", "true", "yes")
         if require_s3 and (not cloud_url or (isinstance(cloud_url, str) and cloud_url.startswith("/"))):
             raise HTTPException(status_code=500, detail="S3 upload failed")
