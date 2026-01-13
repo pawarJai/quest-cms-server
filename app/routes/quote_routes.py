@@ -5,7 +5,7 @@ from app.schemas.quote_schema import QuoteCreate, QuoteResponse
 from app.repository.quote_repository import QuoteRepository
 from app.services.auth_dependency import verify_user
 
-router = APIRouter(prefix="/quotes", tags=["Quotes"])
+router = APIRouter(prefix="/contact-us", tags=["Contact-us"])
 
 
 # ---------------- POST (Public) ----------------
