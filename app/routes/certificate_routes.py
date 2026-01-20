@@ -8,6 +8,7 @@ from app.repository.notification_repository import NotificationRepository
 from app.services.auth_dependency import verify_user
 from app.schemas.certificate_schema import CertificateCreate, CertificateUpdate
 import logging
+import asyncio
 
 logger = logging.getLogger("certifications")
 logger.setLevel(logging.INFO)
@@ -78,19 +79,23 @@ async def create_certificate(payload: CertificateCreate, user=Depends(verify_use
 # Helper: expand file ids to Cloudinary URLs
 # ------------------------------------------------------------------
 async def expand_file_url_ids(file_ids: List[str], request: Request):
-    expanded = []
-    for fid in file_ids or []:
-        f = await FileUrlRepository.get_url_by_file_id(fid)
+    ids = file_ids or []
+    docs = await asyncio.gather(
+        *[FileUrlRepository.get_url_by_file_id(fid) for fid in ids],
+        return_exceptions=False
+    )
+    result = []
+    for fid, f in zip(ids, docs):
         if f:
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
                 url_value = str(request.base_url) + url_value.lstrip("/")
-            expanded.append({
+            result.append({
                 "file_id": str(fid),
                 "filename": f["filename"],
                 "url": url_value
             })
-    return expanded
+    return result
 
 
 async def expand_certificate_url(cert: dict, request: Request):
@@ -222,12 +227,7 @@ async def delete_certificate(cert_id: str, user=Depends(verify_user)):
 @router.get("/url/")
 async def get_certificates_url(request: Request):
     certs = await CertificateRepository.get_all_certificates()
-    logger.info(f"Fetched {len(certs)} certificates for URL expansion.")
-
-    expanded = []
-    for cert in certs:
-        expanded.append(await expand_certificate_url(cert, request))
-
+    expanded = await asyncio.gather(*[expand_certificate_url(c, request) for c in certs]) if certs else []
     return {
         "count": len(expanded),
         "certificates": expanded

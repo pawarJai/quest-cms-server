@@ -155,6 +155,7 @@ from app.services.auth_dependency import verify_user
 from app.repository.upload_repository import UploadRepository
 from typing import Optional
 import logging
+import asyncio
 logging.basicConfig(level=logging.INFO)
 
 router = APIRouter(prefix="/products", tags=["Products"])
@@ -218,7 +219,8 @@ async def expand_file_url(file_id: str, request: Request):
 
 
 async def expand_file_url_list(ids: list[str], request: Request):
-    return [await expand_file_url(i, request) for i in ids if i]
+    tasks = [expand_file_url(i, request) for i in ids if i]
+    return await asyncio.gather(*tasks) if tasks else []
 
 
 async def expand_video(file_id: str, request: Request):
@@ -241,17 +243,26 @@ async def expand_video(file_id: str, request: Request):
 
 # ---------------- EXPAND PRODUCT (URL ONLY) ----------------
 async def expand_product_url(product: dict, request: Request):
-    product["cover_image"] = await expand_file_url(product.get("cover_image"), request)
-    product["product_360_image"] = await expand_file_url(
-        product.get("product_360_image"), request
+    cover_task = expand_file_url(product.get("cover_image"), request)
+    p360_task = expand_file_url(product.get("product_360_image"), request)
+    video_task = expand_video(product.get("product_3d_video"), request)
+    images_task = expand_file_url_list(product.get("images", []), request)
+    docs_task = expand_file_url_list(product.get("documents", []), request)
+
+    features = product.get("features", [])
+    feature_tasks = [expand_file_url(f.get("image_id"), request) for f in features]
+
+    cover, p360, video, images, docs, feature_images = await asyncio.gather(
+        cover_task, p360_task, video_task, images_task, docs_task, asyncio.gather(*feature_tasks) if feature_tasks else asyncio.gather()
     )
-    product["product_3d_video"] = await expand_video(product.get("product_3d_video"), request)
 
-    product["images"] = await expand_file_url_list(product.get("images", []), request)
-    product["documents"] = await expand_file_url_list(product.get("documents", []), request)
-
-    for f in product.get("features", []):
-        f["image"] = await expand_file_url(f.get("image_id"), request)
+    product["cover_image"] = cover
+    product["product_360_image"] = p360
+    product["product_3d_video"] = video
+    product["images"] = images
+    product["documents"] = docs
+    for f, img in zip(features, feature_images if feature_images else []):
+        f["image"] = img
 
     return product
 
@@ -334,20 +345,22 @@ async def get_products_url(request: Request, page: Optional[int] = None, limit: 
     if page is None and limit is None:
         products = await ProductRepository.get_all_products()
         total = len(products)
+        expanded = await asyncio.gather(*[expand_product_url(p, request) for p in products]) if products else []
         return {
             "page": 1,
             "limit": total,
             "total": total,
-            "products": [await expand_product_url(p, request) for p in products],
+            "products": expanded,
         }
     skip, limit = get_pagination(page or 1, limit or 10)
     products = await ProductRepository.get_products_paginated(skip, limit)
     total = await ProductRepository.count_products()
+    expanded = await asyncio.gather(*[expand_product_url(p, request) for p in products]) if products else []
     return {
         "page": page or 1,
         "limit": limit,
         "total": total,
-        "products": [await expand_product_url(p, request) for p in products],
+        "products": expanded,
     }
 
 

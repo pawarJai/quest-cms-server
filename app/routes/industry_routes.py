@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
 from datetime import datetime
 import os
-import base64
+import asyncio
 
 from app.repository.industry_repository import IndustryRepository
 from app.repository.upload_repository import UploadRepository
@@ -22,33 +22,33 @@ router = APIRouter(prefix="/industries", tags=["Industries"])
 # ---------- URL-based expanders ----------
 
 async def expand_clients_url(ids: List[str], request: Request):
-    result = []
-    for cid in ids:
-        client = await ClientRepository.get_client_by_id(cid)
-        if client:
-            from app.routes.client_routes import expand_client_url
-            result.append(await expand_client_url(client, request))
-    return result
+    clients = await asyncio.gather(
+        *[ClientRepository.get_client_by_id(cid) for cid in ids],
+        return_exceptions=False
+    )
+    from app.routes.client_routes import expand_client_url
+    tasks = [expand_client_url(c, request) for c in clients if c]
+    return await asyncio.gather(*tasks) if tasks else []
 
 
 async def expand_products_url(ids: List[str], request: Request):
-    result = []
-    for pid in ids:
-        product = await ProductRepository.get_product_by_id(pid)
-        if product:
-            from app.routes.product_routes import expand_product_url
-            result.append(await expand_product_url(product, request))
-    return result
+    products = await asyncio.gather(
+        *[ProductRepository.get_product_by_id(pid) for pid in ids],
+        return_exceptions=False
+    )
+    from app.routes.product_routes import expand_product_url
+    tasks = [expand_product_url(p, request) for p in products if p]
+    return await asyncio.gather(*tasks) if tasks else []
 
 
 async def expand_certifications_url(ids: List[str], request: Request):
-    result = []
-    for cid in ids:
-        cert = await CertificateRepository.get_certificate_by_id(cid)
-        if cert:
-            from app.routes.certificate_routes import expand_certificate_url
-            result.append(await expand_certificate_url(cert, request))
-    return result
+    certs = await asyncio.gather(
+        *[CertificateRepository.get_certificate_by_id(cid) for cid in ids],
+        return_exceptions=False
+    )
+    from app.routes.certificate_routes import expand_certificate_url
+    tasks = [expand_certificate_url(c, request) for c in certs if c]
+    return await asyncio.gather(*tasks) if tasks else []
 
 
 
@@ -91,31 +91,7 @@ async def expand_file_url(file_id: str | None, request: Request):
 
     url_value = f["url"]
     if isinstance(url_value, str) and url_value.startswith("/"):
-        # attempt S3 re-upload if AWS env configured
-        bucket = os.environ.get("AWS_S3_BUCKET")
-        access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-        secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-        if bucket and access_key and secret_key:
-            file_doc = await UploadRepository.get_file_by_id(file_id)
-            if file_doc and file_doc.get("content"):
-                try:
-                    from app.services.cloudinary_service import upload_to_cloudinary
-                    file_bytes = base64.b64decode(file_doc["content"])
-                    new_url = await upload_to_cloudinary(
-                        file_bytes,
-                        f.get("filename") or "file",
-                        resource_type="image",
-                        key_prefix="industries"
-                    )
-                    if isinstance(new_url, str) and not new_url.startswith("/"):
-                        await FileUrlRepository.update_url(file_id, new_url)
-                        url_value = new_url
-                    else:
-                        url_value = str(request.base_url) + url_value.lstrip("/")
-                except Exception:
-                    url_value = str(request.base_url) + url_value.lstrip("/")
-        else:
-            url_value = str(request.base_url) + url_value.lstrip("/")
+        url_value = str(request.base_url) + url_value.lstrip("/")
     return {
         "file_id": file_id,
         "filename": f["filename"],
@@ -124,49 +100,29 @@ async def expand_file_url(file_id: str | None, request: Request):
 
 
 async def expand_files_url(file_ids: List[str], request: Request):
-    expanded = []
-    for fid in file_ids or []:
-        f = await FileUrlRepository.get_url_by_file_id(fid)
+    ids = file_ids or []
+    docs = await asyncio.gather(
+        *[FileUrlRepository.get_url_by_file_id(fid) for fid in ids],
+        return_exceptions=False
+    )
+    result = []
+    for fid, f in zip(ids, docs):
         if f:
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
-                bucket = os.environ.get("AWS_S3_BUCKET")
-                access_key = os.environ.get("AWS_ACCESS_KEY_ID")
-                secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
-                if bucket and access_key and secret_key:
-                    file_doc = await UploadRepository.get_file_by_id(fid)
-                    if file_doc and file_doc.get("content"):
-                        try:
-                            from app.services.cloudinary_service import upload_to_cloudinary
-                            file_bytes = base64.b64decode(file_doc["content"])
-                            new_url = await upload_to_cloudinary(
-                                file_bytes,
-                                f.get("filename") or "file",
-                                resource_type="image",
-                                key_prefix="industries"
-                            )
-                            if isinstance(new_url, str) and not new_url.startswith("/"):
-                                await FileUrlRepository.update_url(fid, new_url)
-                                url_value = new_url
-                            else:
-                                url_value = str(request.base_url) + url_value.lstrip("/")
-                        except Exception:
-                            url_value = str(request.base_url) + url_value.lstrip("/")
-                else:
-                    url_value = str(request.base_url) + url_value.lstrip("/")
-            expanded.append({
+                url_value = str(request.base_url) + url_value.lstrip("/")
+            result.append({
                 "file_id": fid,
                 "filename": f["filename"],
                 "url": url_value
             })
-    return expanded
+    return result
 
 async def hydrate_industry_url(industry: dict, request: Request):
     if not industry:
         return None
-
-    industry["industry_logo"] = await expand_file_url(industry.get("industry_logo"), request)
-    industry["cover_image"] = await expand_file_url(industry.get("cover_image"), request)
+    logo_task = expand_file_url(industry.get("industry_logo"), request)
+    cover_task = expand_file_url(industry.get("cover_image"), request)
     # industry["industry_images"] = await expand_files_url(
     #     industry.get("industry_images", [])
     # )
@@ -185,14 +141,22 @@ async def hydrate_industry_url(industry: dict, request: Request):
     # 🔑 normalize ObjectId → str
     image_ids = [str(i) for i in image_ids if i]
 
-    industry["industry_images"] = await expand_files_url(image_ids, request)
+    images_task = expand_files_url(image_ids, request)
 
-    # ⚠️ Clients / Products / Certifications remain normal objects
-    industry["clients"] = await expand_clients_url(industry.get("client_ids", []), request)
-    industry["products"] = await expand_products_url(industry.get("product_ids", []), request)
-    industry["certifications"] = await expand_certifications_url(
-        industry.get("certification_ids", []), request
+    clients_task = expand_clients_url(industry.get("client_ids", []), request)
+    products_task = expand_products_url(industry.get("product_ids", []), request)
+    certs_task = expand_certifications_url(industry.get("certification_ids", []), request)
+
+    logo, cover, images, clients, products, certs = await asyncio.gather(
+        logo_task, cover_task, images_task, clients_task, products_task, certs_task
     )
+
+    industry["industry_logo"] = logo
+    industry["cover_image"] = cover
+    industry["industry_images"] = images
+    industry["clients"] = clients
+    industry["products"] = products
+    industry["certifications"] = certs
 
     return industry
 

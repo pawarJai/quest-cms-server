@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
+import asyncio
 from datetime import datetime
 
 from app.repository.news_repository import NewsRepository
@@ -68,19 +69,23 @@ async def expand_file_url(file_id: str | None, request: Request):
 
 
 async def expand_files_url(file_ids: List[str], request: Request):
-    expanded = []
-    for fid in file_ids or []:
-        f = await FileUrlRepository.get_url_by_file_id(fid)
+    ids = file_ids or []
+    docs = await asyncio.gather(
+        *[FileUrlRepository.get_url_by_file_id(fid) for fid in ids],
+        return_exceptions=False
+    )
+    result = []
+    for fid, f in zip(ids, docs):
         if f:
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
                 url_value = str(request.base_url) + url_value.lstrip("/")
-            expanded.append({
+            result.append({
                 "file_id": fid,
                 "filename": f["filename"],
                 "url": url_value
             })
-    return expanded
+    return result
 
 
 # =====================================================
@@ -101,9 +106,8 @@ async def hydrate_news(news: dict):
 async def hydrate_news_url(news: dict, request: Request):
     if not news:
         return None
-
-    news["news_logo"] = await expand_file_url(news.get("news_logo"), request)
-    news["cover_image"] = await expand_file_url(news.get("cover_image"), request)
+    logo_task = expand_file_url(news.get("news_logo"), request)
+    cover_task = expand_file_url(news.get("cover_image"), request)
 
     raw_images = news.get("news_images", [])
 
@@ -116,7 +120,13 @@ async def hydrate_news_url(news: dict, request: Request):
     elif isinstance(raw_images, list):
         image_ids = raw_images
 
-    news["news_images"] = await expand_files_url(image_ids, request)
+    images_task = expand_files_url(image_ids, request)
+
+    logo, cover, images = await asyncio.gather(logo_task, cover_task, images_task)
+
+    news["news_logo"] = logo
+    news["cover_image"] = cover
+    news["news_images"] = images
     return news
 
 
@@ -184,10 +194,11 @@ async def get_news_by_id(news_id: str):
 
 @router.get("/url/")
 async def get_news_url(request: Request):
-    news = await NewsRepository.get_all_news()
+    items = await NewsRepository.get_all_news()
+    expanded = await asyncio.gather(*[hydrate_news_url(n, request) for n in items]) if items else []
     return {
-        "count": len(news),
-        "news": [await hydrate_news_url(n, request) for n in news]
+        "count": len(items),
+        "news": expanded
     }
 
 

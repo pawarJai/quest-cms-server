@@ -7,6 +7,7 @@ from app.repository.upload_repository import UploadRepository
 from app.repository.notification_repository import NotificationRepository
 from app.services.auth_dependency import verify_user
 from app.schemas.client_schema import ClientCreate, ClientUpdate
+import asyncio
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
@@ -29,19 +30,23 @@ async def expand_file_ids(file_ids: List[str]):
 # Helper: expand file ids to Cloudinary URLs (Client)
 # ------------------------------------------------------------------
 async def expand_file_url_ids(file_ids: List[str], request: Request):
-    expanded = []
-    for fid in file_ids or []:
-        f = await FileUrlRepository.get_url_by_file_id(fid)
+    ids = file_ids or []
+    docs = await asyncio.gather(
+        *[FileUrlRepository.get_url_by_file_id(fid) for fid in ids],
+        return_exceptions=False
+    )
+    result = []
+    for fid, f in zip(ids, docs):
         if f:
             url_value = f["url"]
             if isinstance(url_value, str) and url_value.startswith("/"):
                 url_value = str(request.base_url) + url_value.lstrip("/")
-            expanded.append({
+            result.append({
                 "file_id": fid,
                 "filename": f["filename"],
                 "url": url_value
             })
-    return expanded
+    return result
 
 
 async def expand_client_url(client: dict, request: Request):
@@ -70,11 +75,7 @@ async def expand_client_url(client: dict, request: Request):
 @router.get("/url")
 async def get_clients_url(request: Request):
     clients = await ClientRepository.get_all_clients()
-
-    expanded = []
-    for client in clients:
-        expanded.append(await expand_client_url(client, request))
-
+    expanded = await asyncio.gather(*[expand_client_url(c, request) for c in clients]) if clients else []
     return {
         "count": len(expanded),
         "clients": expanded
