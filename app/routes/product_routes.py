@@ -203,6 +203,25 @@ async def expand_file_with_url(file_id: str):
 async def expand_file_with_url_list(ids: list[str]):
     return [await expand_file_with_url(i) for i in ids if i]
 
+async def expand_file_meta(file_id: str, request: Request):
+    if not file_id:
+        return None
+    f = await FileUrlRepository.get_url_by_file_id(file_id)
+    if not f:
+        return {"id": str(file_id), "filename": None, "content": None}
+    url_value = f.get("url")
+    if isinstance(url_value, str) and url_value.startswith("/"):
+        url_value = str(request.base_url) + url_value.lstrip("/")
+    return {
+        "id": str(file_id),
+        "filename": f.get("filename"),
+        "url": url_value,
+        "content": None,
+    }
+
+async def expand_file_meta_list(ids: list[str], request: Request):
+    tasks = [expand_file_meta(i, request) for i in ids if i]
+    return await asyncio.gather(*tasks) if tasks else []
 
 async def expand_file_url(file_id: str, request: Request):
     if not file_id:
@@ -480,7 +499,35 @@ async def get_products_by_type(product_type: str, page: int = 1, limit: int = 10
     products = await ProductRepository.filter_products(query, skip, limit)
     total = await ProductRepository.count_filtered_products(query)
 
-    expanded = await asyncio.gather(*[expand_product_url(p, request) for p in products]) if products else []
+    async def hydrate_meta(p: dict, req: Request):
+        cover_task = expand_file_meta(p.get("cover_image"), req)
+        p360_task = expand_file_meta(p.get("product_360_image"), req)
+        video_task = expand_file_meta(p.get("product_3d_video"), req)
+        images_task = expand_file_meta_list(p.get("images", []), req)
+        docs_task = expand_file_meta_list(p.get("documents", []), req)
+        feature_imgs = [expand_file_meta(f.get("image_id"), req) for f in p.get("features", [])]
+        cover, p360, video, images, docs, features_images = await asyncio.gather(
+            cover_task,
+            p360_task,
+            video_task,
+            images_task,
+            docs_task,
+            asyncio.gather(*feature_imgs) if feature_imgs else asyncio.gather()
+        )
+        p["cover_image"] = cover
+        p["product_360_image"] = p360
+        # ensure video type key retained
+        if video is not None:
+            video["type"] = "video"
+        p["product_3d_video"] = video
+        p["images"] = images
+        p["documents"] = docs
+        for f, img in zip(p.get("features", []), features_images if features_images else []):
+            f["image"] = img
+        return p
+
+    expanded = await asyncio.gather(*[hydrate_meta(p, request) for p in products]) if products else []
+
     return {
         "page": page,
         "limit": limit,
