@@ -136,6 +136,85 @@ async def upload_videos(request: Request, files: list[UploadFile] = File(...), c
     data = await asyncio.gather(*tasks)
     return {"success": True, "data": data}
 
+
+
+@router.post("/upload/3d-models", dependencies=[Depends(verify_user)])
+async def upload_3d_models(
+    request: Request,
+    files: list[UploadFile] = File(...),
+    category: str | None = None
+):
+    ALLOWED_EXTENSIONS = {".glb"}
+
+    async def process_file(file: UploadFile):
+        # 1️⃣ Validate extension
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in ALLOWED_EXTENSIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="Only .glb files are allowed"
+            )
+
+        # 2️⃣ Read file
+        file_bytes = await file.read()
+
+        # 3️⃣ Upload as RAW (important for GLB)
+        cloud_url = await upload_to_cloudinary(
+            file_bytes,
+            file.filename,
+            resource_type="raw",
+            key_prefix=category or "product-3d-models"
+        )
+
+        if not cloud_url:
+            logging.error(
+                f"Cloud upload returned empty url filename={file.filename} category={category}"
+            )
+
+        # 4️⃣ Optional S3 safety
+        require_s3 = os.environ.get("AWS_S3_REQUIRED", "").lower() in ("1", "true", "yes")
+        if require_s3 and (
+            not cloud_url or
+            (isinstance(cloud_url, str) and cloud_url.startswith("/"))
+        ):
+            raise HTTPException(status_code=500, detail="S3 upload failed")
+
+        # 5️⃣ Generate file ID
+        file_id = str(uuid4())
+
+        # 6️⃣ Save URL mapping
+        try:
+            await FileUrlRepository.save_url(
+                file_id=file_id,
+                filename=file.filename,
+                url=cloud_url,
+                file_type="3d-model"
+            )
+        except Exception as e:
+            logging.error(f"FileUrlRepository.save_url failed: {e}")
+
+        # 7️⃣ Normalize URL
+        absolute_cloudinary_url = (
+            cloud_url
+            if not isinstance(cloud_url, str) or not cloud_url.startswith("/")
+            else str(request.base_url) + cloud_url.lstrip("/")
+        )
+
+        return {
+            "id": file_id,
+            "filename": file.filename,
+            "cloudinary_url": absolute_cloudinary_url,
+            "url": absolute_cloudinary_url
+        }
+
+    tasks = [process_file(f) for f in files]
+    data = await asyncio.gather(*tasks)
+
+    return {
+        "success": True,
+        "data": data
+    }
+
 @router.get("/{file_id}")
 async def get_file(file_id: str):
     file_doc = await UploadRepository.get_file_by_id(file_id)
