@@ -469,7 +469,7 @@ async def filter_products(payload: ProductFilterRequest):
 
 
 @router.get("/by-type/{product_type}")
-async def get_products_by_type(product_type: str, page: int = 1, limit: int = 10):
+async def get_products_by_type(product_type: str, page: int = 1, limit: int = 10, request: Request = None):
     # pagination
     page = max(page, 1)
     limit = min(max(limit, 1), 100)
@@ -480,9 +480,10 @@ async def get_products_by_type(product_type: str, page: int = 1, limit: int = 10
     products = await ProductRepository.filter_products(query, skip, limit)
     total = await ProductRepository.count_filtered_products(query)
 
+    expanded = await asyncio.gather(*[expand_product_url(p, request) for p in products]) if products else []
     return {
         "page": page,
         "limit": limit,
         "total": total,
-        "products": [await expand_product(p) for p in products],
+        "products": expanded,
     }
